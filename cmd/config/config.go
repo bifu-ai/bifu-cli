@@ -260,7 +260,7 @@ func newInitCmd() *cobra.Command {
 				p.Forex.HTTPEndpoint = "https://api.dev.mtapi.org"
 				p.Forex.WSEndpoint = "wss://api.dev.mtapi.org"
 				p.Forex.WSPath = "/mt5/Events"
-				p.Pushgw.WSEndpoint = "wss://api.bifu.dev"
+				p.Pushgw.WSEndpoint = "wss://fxapi.bifu.dev"
 				p.Pushgw.WSPath = "/pushgw/ws"
 			}
 

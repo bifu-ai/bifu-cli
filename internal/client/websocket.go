@@ -68,7 +68,8 @@ func (c *WSClient) Connect() error {
 	defer c.mu.Unlock()
 
 	dialer := websocket.Dialer{
-		TLSClientConfig:  &tls.Config{InsecureSkipVerify: false},
+		// Force HTTP/1.1 — WebSocket upgrade is incompatible with HTTP/2 (ALPN h2).
+		TLSClientConfig:  &tls.Config{NextProtos: []string{"http/1.1"}},
 		HandshakeTimeout: 10 * time.Second,
 	}
 
