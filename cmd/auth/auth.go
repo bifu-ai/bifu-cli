@@ -20,8 +20,9 @@ type LoadFn func() (*clifconfig.Profile, *output.Printer, error)
 func NewAuthCmd(load LoadFn) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "auth",
-		Short: "Authentication utilities (cookie encode/decode/set)",
+		Short: "Authentication utilities (login, cookie encode/decode/set)",
 	}
+	cmd.AddCommand(newLoginCmd(load))
 	cmd.AddCommand(newCookieCmd(load))
 	return cmd
 }

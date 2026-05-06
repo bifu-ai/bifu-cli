@@ -28,8 +28,9 @@ make install
 # 1. 初始化 dev 环境配置
 bifu-cli config init --env dev
 
-# 2. 生成并保存认证 Cookie（需要用户 UID）
-bifu-cli auth cookie set 620640738 --env dev
+# 2. 登录并自动保存 Cookie（推荐）
+bifu-cli --profile dev auth login
+# 按提示输入邮箱密码和验证码，Cookie 自动写入 profile
 
 # 3. 查看当前配置
 bifu-cli config get
@@ -253,11 +254,38 @@ bifu-cli contract order modify --order-id 123456789 --size 2
 
 ---
 
-## auth — Cookie 认证工具
+## auth — 认证管理
 
-外汇（forex）和支付（payment）接口使用 `user_auth_name` Cookie 认证。使用 `auth cookie` 命令快速生成并保存 Cookie，无需手动从浏览器复制。
+外汇（forex）和支付（payment）接口使用 `user_auth_name` Cookie 认证。
 
-### 生成并保存 Cookie
+### auth login — 邮箱密码登录（推荐）
+
+通过账号密码 + 邮件验证码完成登录，Cookie 自动写入 profile，无需手动复制。
+
+```bash
+# 交互式登录（密码不显示在屏幕）
+bifu-cli --profile dev auth login
+
+# 预填用户名，密码仍隐藏输入
+bifu-cli --profile dev auth login --username user@example.com
+
+# 完全非交互式（CI 场景）
+bifu-cli --profile dev auth login --username user@example.com --password 'MyPass'
+```
+
+**登录流程：**
+1. 输入邮箱和密码（密码不回显）
+2. 服务端发送验证码到邮箱
+3. 输入收到的验证码
+4. Cookie 自动保存到 profile 的 `auth_cookie` 字段（有效期 30 天）
+
+> **注意**：Dev 环境验证码固定为 `123456`。
+
+### auth cookie — 本地 Cookie 工具
+
+> 仅适用于本地 K8s 环境（`local`），Dev/Staging/Prod 需使用 `auth login`。
+
+#### 生成并保存 Cookie（local 环境）
 
 ```bash
 # 生成 cookie 并保存到当前激活 profile（env 自动从 profile 名推断）
@@ -271,13 +299,13 @@ bifu-cli auth cookie set 620640738 --env staging
 bifu-cli --profile staging auth cookie set 620640738 --env staging
 ```
 
-### 仅生成（不保存）
+#### 仅生成（不保存）
 
 ```bash
 bifu-cli auth cookie encode 620640738 --env dev
 ```
 
-### 解码 Cookie
+#### 解码 Cookie
 
 ```bash
 bifu-cli auth cookie decode "yHjCFUQ2jFBQ..."
@@ -482,10 +510,10 @@ bifu-cli config init --profile dev --env dev
 bifu-cli config init --profile staging --env staging
 bifu-cli config init --profile prod --env prod
 
-# 各 profile 设置 Cookie（根据实际 UID 替换）
-bifu-cli --profile dev auth cookie set 620640738
-bifu-cli --profile staging auth cookie set 620640738 --env staging
-bifu-cli --profile prod auth cookie set 620640738 --env prod
+# 各 profile 登录（自动获取并保存 Cookie）
+bifu-cli --profile dev auth login
+bifu-cli --profile staging auth login
+bifu-cli --profile prod auth login
 
 # 使用指定 profile 执行命令（不切换默认值）
 bifu-cli -p dev spot balance
