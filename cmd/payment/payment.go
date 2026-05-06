@@ -91,43 +91,93 @@ func newBalanceCmd(load LoadFn) *cobra.Command {
 // ── payment transfer ──────────────────────────────────────────────────────────
 
 func newTransferCmd(load LoadFn) *cobra.Command {
-	var fromType, toType int
+	var direction string
 	var amount, currency string
-	var loginID int64
+	var savingAccountID, loginID, forexInternalID int64
 	cmd := &cobra.Command{
 		Use:   "transfer",
-		Short: "Transfer funds between account types",
-		Long: `Transfer funds between account types.
+		Short: "Transfer funds between saving and forex accounts",
+		Long: `Transfer funds between a saving account and a forex (MT5) account.
 
-Account types:
-  1 = Saving account
-  2 = Forex commission
-  3 = Forex trading account (requires --login-id)`,
-		Example: `  bifu-cli payment transfer --from 1 --to 3 --amount 1000 --currency USD --login-id 90390034
-  bifu-cli payment transfer --from 3 --to 1 --amount 500 --currency USD --login-id 90390034`,
+Direction:
+  to-forex   Transfer from saving → forex account
+  to-saving  Transfer from forex  → saving account`,
+		Example: `  bifu-cli payment transfer --direction to-forex  --login-id 90390034 --amount 1000 --currency USD
+  bifu-cli payment transfer --direction to-saving --login-id 90390034 --amount 500  --currency USD`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			c, pr, err := newClient(load)
 			if err != nil {
 				return err
 			}
+			var transferType int64
+			switch direction {
+			case "to-forex", "2":
+				transferType = 2
+			case "to-saving", "1":
+				transferType = 1
+			default:
+				return fmt.Errorf("--direction must be 'to-forex' or 'to-saving'")
+			}
+			if loginID == 0 {
+				return fmt.Errorf("--login-id is required")
+			}
+			// Look up internal forex account ID from MT5 login.
+			if forexInternalID == 0 {
+				accounts, err := c.GetForexAccountList()
+				if err != nil {
+					return fmt.Errorf("lookup forex accounts: %w", err)
+				}
+				loginStr := strconv.FormatInt(loginID, 10)
+				for _, a := range accounts {
+					if a.Login == loginStr && a.ID != "" {
+						if id, err2 := strconv.ParseInt(a.ID, 10, 64); err2 == nil {
+							forexInternalID = id
+							break
+						}
+					}
+				}
+				if forexInternalID == 0 {
+					return fmt.Errorf("forex account with login %d not found", loginID)
+				}
+			}
+			// Auto-lookup saving account ID by currency if not provided.
+			if savingAccountID == 0 {
+				bal, err := c.GetSavingBalance(currency)
+				if err != nil {
+					return fmt.Errorf("lookup saving account: %w", err)
+				}
+				for _, item := range bal.Items {
+					if item.Currency == currency && item.ID != "" {
+						if id, err2 := strconv.ParseInt(item.ID, 10, 64); err2 == nil {
+							savingAccountID = id
+							break
+						}
+					}
+				}
+				if savingAccountID == 0 {
+					return fmt.Errorf("no %s saving account found; use --saving-id to specify manually", currency)
+				}
+			}
 			if err := c.Transfer(&paymentapi.TransferReq{
-				FromType: fromType,
-				ToType:   toType,
-				Amount:   amount,
-				Currency: currency,
-				LoginID:  loginID,
+				SavingAccountID: savingAccountID,
+				ForexAccountID:  forexInternalID,
+				Amount:          amount,
+				Currency:        currency,
+				Type:            transferType,
 			}); err != nil {
 				return err
 			}
-			pr.OK("Transfer submitted: %s %s  (type %d → type %d)", amount, currency, fromType, toType)
+			pr.OK("Transfer submitted: %s %s (%s)", amount, currency, direction)
 			return nil
 		},
 	}
-	cmd.Flags().IntVar(&fromType, "from", 1, "Source account type (1=saving, 2=commission, 3=forex)")
-	cmd.Flags().IntVar(&toType, "to", 3, "Destination account type")
+	cmd.Flags().StringVar(&direction, "direction", "", "Transfer direction: to-forex | to-saving")
 	cmd.Flags().StringVar(&amount, "amount", "", "Amount to transfer")
 	cmd.Flags().StringVar(&currency, "currency", "USD", "Currency")
-	cmd.Flags().Int64Var(&loginID, "login-id", 0, "Forex login ID (required for type 3)")
+	cmd.Flags().Int64Var(&loginID, "login-id", 0, "Forex (MT5) login ID (used to look up internal account ID)")
+	cmd.Flags().Int64Var(&forexInternalID, "forex-id", 0, "Forex internal account ID (overrides --login-id lookup)")
+	cmd.Flags().Int64Var(&savingAccountID, "saving-id", 0, "Saving account ID (optional, auto-detected from --currency)")
+	_ = cmd.MarkFlagRequired("direction")
 	_ = cmd.MarkFlagRequired("amount")
 	return cmd
 }
@@ -135,29 +185,36 @@ Account types:
 // ── payment forex-accounts ────────────────────────────────────────────────────
 
 func newForexAccountsCmd(load LoadFn) *cobra.Command {
-	var loginID int64
 	cmd := &cobra.Command{
 		Use:   "forex-accounts",
 		Short: "List linked forex (MT5) accounts",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			_, pr, err := load()
+			p, pr, err := load()
 			if err != nil {
 				return err
 			}
-			// The forex account group endpoint is handled by the forex command group.
-			// Here we show a helpful redirect.
-			_ = loginID
-			pr.Line("Use: %s", output.Bold("bifu-cli forex account list"))
-			pr.Line("     %s", output.Bold("bifu-cli forex account get --login-id <id>"))
-			fmt.Println()
-			pr.Line("Or for fund operations between saving and forex accounts:")
-			pr.Line("  bifu-cli payment transfer --from 1 --to 3 --amount 1000 --currency USD --login-id <id>")
+			c := paymentapi.New(p)
+			c.SetVerbose(mustBool(cmd.Root().PersistentFlags().GetBool("verbose")))
+			items, err := c.GetForexAccountList()
+			if err != nil {
+				return err
+			}
+			if len(items) == 0 {
+				pr.Line("No forex accounts found.")
+				return nil
+			}
+			rows := make([][]string, 0, len(items))
+			for _, a := range items {
+				rows = append(rows, []string{a.Login, a.Type + "/" + a.SubType, a.Status, a.Balance, a.Equity, a.MarginFree, a.Leverage, a.GroupType})
+			}
+			pr.PrintTable([]string{"LOGIN", "TYPE", "STATUS", "BALANCE", "EQUITY", "FREE MARGIN", "LEVERAGE", "GROUP"}, rows)
 			return nil
 		},
 	}
-	cmd.Flags().Int64Var(&loginID, "login-id", 0, "Forex account login ID")
 	return cmd
 }
+
+func mustBool(v bool, _ error) bool { return v }
 
 // fmtFloat is a helper to format a float64 as string for display.
 func fmtFloat(v float64) string {

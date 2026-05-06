@@ -158,7 +158,11 @@ func doLogin(baseURL, username, password string) (issueID string, err error) {
 		return "", fmt.Errorf("[%s] %s", out.RetCode, out.RetMsg)
 	}
 	if out.Result.IssueID == "" {
-		return "", fmt.Errorf("server returned empty issueId")
+		msg := out.RetMsg
+		if msg == "" || msg == "success" {
+			msg = "email sending may have failed"
+		}
+		return "", fmt.Errorf("no issueId returned: %s", msg)
 	}
 	return out.Result.IssueID, nil
 }

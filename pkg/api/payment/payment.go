@@ -34,6 +34,7 @@ type SavingBalanceResult struct {
 }
 
 type SavingAccountItem struct {
+	ID               string `json:"id"`
 	Currency         string `json:"currency"`
 	Balance          string `json:"balance"`
 	FrozenBalance    string `json:"frozenBalance"`
@@ -56,14 +57,21 @@ type BalanceBreakdown struct {
 }
 
 type ForexAccountItem struct {
-	LoginID     int64  `json:"loginId"`
-	Equity      string `json:"equity"`
+	ID          string `json:"id"`
+	Login       string `json:"login"`
+	Status      string `json:"status"`
+	Type        string `json:"type"`
+	SubType     string `json:"subType"`
+	Leverage    string `json:"leverage"`
 	Balance     string `json:"balance"`
-	FreeMargin  string `json:"freeMargin"`
+	Equity      string `json:"equity"`
+	MarginFree  string `json:"marginFree"`
 	Margin      string `json:"margin"`
 	MarginLevel string `json:"marginLevel"`
-	Currency    string `json:"currency"`
-	AccountType string `json:"accountType"`
+	Group       string `json:"group"`
+	GroupType   string `json:"groupType"`
+	IsDefault   bool   `json:"isDefault"`
+	Enable      bool   `json:"enable"`
 }
 
 type CreateForexOrderReq struct {
@@ -144,11 +152,11 @@ type ForexHistoryOrder struct {
 }
 
 type TransferReq struct {
-	FromType int    `json:"fromType"` // 1=saving, 2=forex commission, 3=forex account
-	ToType   int    `json:"toType"`
-	Amount   string `json:"amount"`
-	Currency string `json:"currency"`
-	LoginID  int64  `json:"loginId,omitempty"` // required for forex transfers
+	SavingAccountID int64  `json:"saving_account_id"`
+	ForexAccountID  int64  `json:"forex_account_id"` // MT5 login ID
+	Amount          string `json:"amount"`
+	Currency        string `json:"currency"`
+	Type            int64  `json:"type"` // 1=forex_to_saving, 2=saving_to_forex
 }
 
 type DepositCheckoutReq struct {
@@ -272,13 +280,19 @@ func (c *Client) GetForexOpenOrders(loginID int64) ([]ForexOpenOrder, error) {
 	if err != nil {
 		return nil, err
 	}
-	var envelope struct {
-		Orders []ForexOpenOrder `json:"orders"`
+	// API returns result as a direct array: {"result": [...]}
+	var orders []ForexOpenOrder
+	if err := client.ParsePaymentResponse(raw.Body, &orders); err != nil {
+		// Fallback: try object wrapper {"orders": [...]}
+		var envelope struct {
+			Orders []ForexOpenOrder `json:"orders"`
+		}
+		if err2 := client.ParsePaymentResponse(raw.Body, &envelope); err2 != nil {
+			return nil, err
+		}
+		return envelope.Orders, nil
 	}
-	if err := client.ParsePaymentResponse(raw.Body, &envelope); err != nil {
-		return nil, err
-	}
-	return envelope.Orders, nil
+	return orders, nil
 }
 
 // BatchCloseForexOrder closes multiple positions in a single API call.
@@ -313,9 +327,26 @@ func (c *Client) BatchCancelForexOrder(req *BatchCancelForexOrderReq) ([]BatchOr
 	return envelope.Results, nil
 }
 
-// Transfer moves funds between account types (saving/forex/commission).
+// GetForexAccountList fetches all forex (MT5) accounts linked to the user.
+func (c *Client) GetForexAccountList() ([]ForexAccountItem, error) {
+	u := c.profile.GetPaymentURL("/forex-account/list")
+	raw, err := c.http.GetPayment(u, nil)
+	if err != nil {
+		return nil, err
+	}
+	var result struct {
+		Items []ForexAccountItem `json:"items"`
+	}
+	if err := client.ParsePaymentResponse(raw.Body, &result); err != nil {
+		return nil, err
+	}
+	return result.Items, nil
+}
+
+// Transfer moves funds between saving and forex accounts.
+// req.Type: 1=forex_to_saving, 2=saving_to_forex.
 func (c *Client) Transfer(req *TransferReq) error {
-	u := c.profile.GetPaymentURL("/transfer")
+	u := c.profile.GetPaymentURL("/forex-saving/transfer")
 	raw, err := c.http.PostPayment(u, req)
 	if err != nil {
 		return err
