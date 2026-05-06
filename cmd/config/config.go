@@ -48,8 +48,11 @@ func newGetCmd() *cobra.Command {
 				return err
 			}
 			name := cfg.ActiveProfile
+			// local --profile flag takes priority, then global --profile/-p flag
 			if profile != "" {
 				name = profile
+			} else if g, _ := cmd.Root().PersistentFlags().GetString("profile"); g != "" && g != "default" {
+				name = g
 			}
 			p, ok := cfg.Profiles[name]
 			if !ok {
