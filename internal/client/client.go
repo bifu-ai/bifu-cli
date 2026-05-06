@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -25,10 +26,10 @@ import (
 type AuthMode int
 
 const (
-	AuthNone    AuthMode = iota
-	AuthCookie           // user_auth_name cookie (payment / forex)
-	AuthAPIKey           // ACCESS-KEY + HMAC-SHA256 signature (spot / contract)
-	AuthUToken           // u-token header (new gateway)
+	AuthNone   AuthMode = iota
+	AuthCookie          // user_auth_name cookie (payment / forex)
+	AuthAPIKey          // ACCESS-KEY + HMAC-SHA256 signature (spot / contract)
+	AuthUToken          // u-token header (new gateway)
 )
 
 // Auth holds resolved credentials for a single request.
@@ -78,19 +79,23 @@ func SignAPIKey(secretKey, timestamp, method, path, body string) string {
 }
 
 // ApplySpot sets Spot API-Key auth headers on an existing request.
+// Direct map assignment is used to bypass Go's header canonicalization so that
+// "Decode-MM-Auth-Access-Key" is sent verbatim (not "Decode-Mm-Auth-Access-Key").
 func (am *AuthManager) ApplySpot(req *http.Request, bodyStr string) {
 	am.mu.RLock()
 	defer am.mu.RUnlock()
 	ts := strconv.FormatInt(time.Now().UnixMilli(), 10)
 	sig := SignAPIKey(am.profile.SpotSecretKey, ts, req.Method, req.URL.Path, bodyStr)
-	req.Header.Set("Decode-MM-Auth-Access-Key", am.profile.SpotAccessKey)
-	req.Header.Set("Decode-MM-Auth-Timestamp", ts)
-	req.Header.Set("Decode-MM-Auth-Signature", sig)
-	req.Header.Set("terminalType", am.profile.TerminalType)
-	req.Header.Set("locale", am.profile.Locale)
+	req.Header["Decode-MM-Auth-Access-Key"] = []string{am.profile.SpotAccessKey}
+	req.Header["Decode-MM-Auth-Timestamp"] = []string{ts}
+	req.Header["Decode-MM-Auth-Signature"] = []string{sig}
+	req.Header["terminalType"] = []string{am.profile.TerminalType}
+	req.Header["locale"] = []string{am.profile.Locale}
 }
 
 // ApplyContract sets Contract API-Key auth headers.
+// Direct map assignment is used to bypass Go's header canonicalization so that
+// "Decode-MM-Auth-Access-Key" is sent verbatim (not "Decode-Mm-Auth-Access-Key").
 func (am *AuthManager) ApplyContract(req *http.Request, bodyStr string) {
 	am.mu.RLock()
 	defer am.mu.RUnlock()
@@ -102,11 +107,11 @@ func (am *AuthManager) ApplyContract(req *http.Request, bodyStr string) {
 	}
 	ts := strconv.FormatInt(time.Now().UnixMilli(), 10)
 	sig := SignAPIKey(sec, ts, req.Method, req.URL.Path, bodyStr)
-	req.Header.Set("Decode-MM-Auth-Access-Key", key)
-	req.Header.Set("Decode-MM-Auth-Timestamp", ts)
-	req.Header.Set("Decode-MM-Auth-Signature", sig)
-	req.Header.Set("terminalType", am.profile.TerminalType)
-	req.Header.Set("locale", am.profile.Locale)
+	req.Header["Decode-MM-Auth-Access-Key"] = []string{key}
+	req.Header["Decode-MM-Auth-Timestamp"] = []string{ts}
+	req.Header["Decode-MM-Auth-Signature"] = []string{sig}
+	req.Header["terminalType"] = []string{am.profile.TerminalType}
+	req.Header["locale"] = []string{am.profile.Locale}
 }
 
 // ApplyCookie sets the user_auth_name cookie header.
@@ -238,8 +243,8 @@ func (c *HTTPClient) do(method, rawURL string, params map[string]string, body in
 
 	if c.Verbose {
 		fmt.Fprintf(os.Stderr, "[HTTP] %s %s\n", method, u.String())
-		for k := range req.Header {
-			fmt.Fprintf(os.Stderr, "[HTTP]   %s: %s\n", k, req.Header.Get(k))
+		for k, vs := range req.Header {
+			fmt.Fprintf(os.Stderr, "[HTTP]   %s: %s\n", k, strings.Join(vs, ", "))
 		}
 		if bodyStr != "" {
 			fmt.Fprintf(os.Stderr, "[HTTP]   body: %s\n", bodyStr)
@@ -261,6 +266,17 @@ func (c *HTTPClient) do(method, rawURL string, params map[string]string, body in
 	if c.Verbose {
 		fmt.Fprintf(os.Stderr, "[HTTP] <- %d (%dms) body: %s\n",
 			resp.StatusCode, time.Since(start).Milliseconds(), truncate(string(data), 500))
+	}
+
+	if resp.StatusCode == 401 {
+		return nil, fmt.Errorf("authentication failed (HTTP 401): API key may be expired or invalid")
+	}
+	if resp.StatusCode == 403 {
+		msg := strings.TrimSpace(string(data))
+		if msg == "" {
+			msg = "access denied"
+		}
+		return nil, fmt.Errorf("access denied (HTTP 403): %s", msg)
 	}
 
 	return &HTTPResponse{

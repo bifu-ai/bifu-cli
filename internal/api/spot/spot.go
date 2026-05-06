@@ -72,11 +72,18 @@ type AccountInfo struct {
 }
 
 type BalanceItem struct {
-	CoinID           int    `json:"coinId"`
-	Symbol           string `json:"symbol"`
-	AvailableBalance string `json:"availableBalance"`
-	FrozenBalance    string `json:"frozenBalance"`
-	TotalBalance     string `json:"totalBalance"`
+	CoinID                json.Number `json:"coinId"`
+	Amount                string      `json:"amount"`
+	PendingDepositAmount  string      `json:"pendingDepositAmount"`
+	PendingWithdrawAmount string      `json:"pendingWithdrawAmount"`
+	CreatedTime           string      `json:"createdTime"`
+	UpdatedTime           string      `json:"updatedTime"`
+}
+
+type AccountAsset struct {
+	AccountID   json.Number   `json:"accountId"`
+	BalanceList []BalanceItem `json:"balanceList"`
+	Version     json.Number   `json:"version"`
 }
 
 // ── Transfer types ─────────────────────────────────────────────────────────────
@@ -208,18 +215,21 @@ func (c *Client) ListOrderHistory(symbolID string, limit int) ([]Order, error) {
 	return parsePageDataOrders(raw.Body)
 }
 
-// GetBalance returns the spot account balance.
+// GetBalance returns the spot account balance list.
 func (c *Client) GetBalance() ([]BalanceItem, error) {
-	u := c.profile.GetPrivateURL("/spot/account/balance")
+	if c.profile.Auth.SpotAccessKey == "" {
+		return nil, fmt.Errorf("spot API key not configured; run: bifu-cli config set --spot-key KEY --spot-secret SECRET")
+	}
+	u := c.profile.GetPrivateURL("/spot/account/getAccountAsset")
 	raw, err := c.http.GetSpot(u, nil)
 	if err != nil {
 		return nil, err
 	}
-	var items []BalanceItem
-	if err := client.ParseAPIResponse(raw.Body, &items); err != nil {
+	var asset AccountAsset
+	if err := client.ParseAPIResponse(raw.Body, &asset); err != nil {
 		return nil, err
 	}
-	return items, nil
+	return asset.BalanceList, nil
 }
 
 // Transfer moves funds between spot sub-accounts.

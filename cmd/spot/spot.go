@@ -218,9 +218,9 @@ func newBalanceCmd(load LoadFn) *cobra.Command {
 			}
 			var rows [][]string
 			for _, b := range items {
-				rows = append(rows, []string{b.Symbol, b.TotalBalance, b.AvailableBalance, b.FrozenBalance})
+				rows = append(rows, []string{b.CoinID.String(), b.Amount, b.PendingDepositAmount, b.PendingWithdrawAmount})
 			}
-			pr.PrintTable([]string{"SYMBOL", "TOTAL", "AVAILABLE", "FROZEN"}, rows)
+			pr.PrintTable([]string{"COIN_ID", "AMOUNT", "PENDING_DEPOSIT", "PENDING_WITHDRAW"}, rows)
 			return nil
 		},
 	}
