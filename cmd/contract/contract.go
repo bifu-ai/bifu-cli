@@ -32,7 +32,9 @@ func newClient(load LoadFn) (*contractapi.Client, *output.Printer, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	return contractapi.New(p), pr, nil
+	c := contractapi.New(p)
+	c.SetVerbose(pr.Verbose)
+	return c, pr, nil
 }
 
 // ── contract order ────────────────────────────────────────────────────────────

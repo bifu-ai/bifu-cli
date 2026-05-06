@@ -11,6 +11,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"strconv"
 	"sync"
 	"time"
@@ -67,12 +68,10 @@ func NewContractAuthManager(auth *clifconfig.AuthProfile) *AuthManager {
 	return am
 }
 
-// SignAPIKey builds an HMAC-SHA256 signature: sign(timestamp, method, path, body).
+// SignAPIKey builds an HMAC-SHA256 signature matching ApiAuthInterceptor:
+// message = URI + "|" + timestamp  (URI = path WITHOUT query params)
 func SignAPIKey(secretKey, timestamp, method, path, body string) string {
-	msg := timestamp + method + path
-	if body != "" {
-		msg += body
-	}
+	msg := path + "|" + timestamp
 	mac := hmac.New(sha256.New, []byte(secretKey))
 	mac.Write([]byte(msg))
 	return hex.EncodeToString(mac.Sum(nil))
@@ -84,9 +83,9 @@ func (am *AuthManager) ApplySpot(req *http.Request, bodyStr string) {
 	defer am.mu.RUnlock()
 	ts := strconv.FormatInt(time.Now().UnixMilli(), 10)
 	sig := SignAPIKey(am.profile.SpotSecretKey, ts, req.Method, req.URL.Path, bodyStr)
-	req.Header.Set("ACCESS-KEY", am.profile.SpotAccessKey)
-	req.Header.Set("ACCESS-TIMESTAMP", ts)
-	req.Header.Set("ACCESS-SIGN", sig)
+	req.Header.Set("Decode-MM-Auth-Access-Key", am.profile.SpotAccessKey)
+	req.Header.Set("Decode-MM-Auth-Timestamp", ts)
+	req.Header.Set("Decode-MM-Auth-Signature", sig)
 	req.Header.Set("terminalType", am.profile.TerminalType)
 	req.Header.Set("locale", am.profile.Locale)
 }
@@ -103,9 +102,9 @@ func (am *AuthManager) ApplyContract(req *http.Request, bodyStr string) {
 	}
 	ts := strconv.FormatInt(time.Now().UnixMilli(), 10)
 	sig := SignAPIKey(sec, ts, req.Method, req.URL.Path, bodyStr)
-	req.Header.Set("ACCESS-KEY", key)
-	req.Header.Set("ACCESS-TIMESTAMP", ts)
-	req.Header.Set("ACCESS-SIGN", sig)
+	req.Header.Set("Decode-MM-Auth-Access-Key", key)
+	req.Header.Set("Decode-MM-Auth-Timestamp", ts)
+	req.Header.Set("Decode-MM-Auth-Signature", sig)
 	req.Header.Set("terminalType", am.profile.TerminalType)
 	req.Header.Set("locale", am.profile.Locale)
 }
@@ -126,7 +125,11 @@ type HTTPClient struct {
 	http    *http.Client
 	profile *clifconfig.Profile
 	auth    *AuthManager
+	Verbose bool
 }
+
+// SetVerbose enables or disables HTTP request/response logging.
+func (c *HTTPClient) SetVerbose(v bool) { c.Verbose = v }
 
 // NewHTTPClient creates a client using the Spot credential set.
 func NewHTTPClient(profile *clifconfig.Profile) *HTTPClient {
@@ -233,6 +236,16 @@ func (c *HTTPClient) do(method, rawURL string, params map[string]string, body in
 		c.auth.ApplyCookie(req)
 	}
 
+	if c.Verbose {
+		fmt.Fprintf(os.Stderr, "[HTTP] %s %s\n", method, u.String())
+		for k := range req.Header {
+			fmt.Fprintf(os.Stderr, "[HTTP]   %s: %s\n", k, req.Header.Get(k))
+		}
+		if bodyStr != "" {
+			fmt.Fprintf(os.Stderr, "[HTTP]   body: %s\n", bodyStr)
+		}
+	}
+
 	start := time.Now()
 	resp, err := c.http.Do(req)
 	if err != nil {
@@ -243,6 +256,11 @@ func (c *HTTPClient) do(method, rawURL string, params map[string]string, body in
 	data, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("read body: %w", err)
+	}
+
+	if c.Verbose {
+		fmt.Fprintf(os.Stderr, "[HTTP] <- %d (%dms) body: %s\n",
+			resp.StatusCode, time.Since(start).Milliseconds(), truncate(string(data), 500))
 	}
 
 	return &HTTPResponse{

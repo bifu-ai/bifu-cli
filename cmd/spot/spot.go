@@ -30,7 +30,9 @@ func newclient(load LoadFn) (*spotapi.Client, *output.Printer, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	return spotapi.New(p), pr, nil
+	c := spotapi.New(p)
+	c.SetVerbose(pr.Verbose)
+	return c, pr, nil
 }
 
 func newOrderCmd(load LoadFn) *cobra.Command {

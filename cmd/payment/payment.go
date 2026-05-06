@@ -32,7 +32,9 @@ func newClient(load LoadFn) (*paymentapi.Client, *output.Printer, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	return paymentapi.New(p), pr, nil
+	c := paymentapi.New(p)
+	c.SetVerbose(pr.Verbose)
+	return c, pr, nil
 }
 
 // ── payment balance ───────────────────────────────────────────────────────────

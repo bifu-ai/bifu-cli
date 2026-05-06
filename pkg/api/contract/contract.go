@@ -24,6 +24,9 @@ func New(profile *clifconfig.Profile) *Client {
 	}
 }
 
+// SetVerbose enables HTTP request/response logging.
+func (c *Client) SetVerbose(v bool) { c.http.SetVerbose(v) }
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type CreateOrderReq struct {

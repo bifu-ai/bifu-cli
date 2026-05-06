@@ -8,6 +8,7 @@ import (
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 
+	"bifu-cli/cmd/auth"
 	"bifu-cli/cmd/config"
 	"bifu-cli/cmd/contract"
 	"bifu-cli/cmd/forex"
@@ -59,6 +60,7 @@ func init() {
 	load := loadCtx
 
 	rootCmd.AddCommand(config.NewConfigCmd())
+	rootCmd.AddCommand(auth.NewAuthCmd(load))
 	rootCmd.AddCommand(spot.NewSpotCmd(load))
 	rootCmd.AddCommand(contract.NewContractCmd(load))
 	rootCmd.AddCommand(payment.NewPaymentCmd(load))
