@@ -28,8 +28,8 @@ make install
 # 1. 初始化 dev 环境配置
 bifu-cli config init --env dev
 
-# 2. 设置认证 Cookie（从浏览器 DevTools 获取）
-bifu-cli config set --auth-cookie "your_cookie_value"
+# 2. 生成并保存认证 Cookie（需要用户 UID）
+bifu-cli auth cookie set 620640738 --env dev
 
 # 3. 查看当前配置
 bifu-cli config get
@@ -62,21 +62,20 @@ bifu-cli forex order create --login-id 90390034 --symbol EURUSD --type buy --vol
 ### 初始化 Profile
 
 ```bash
-# 使用 local 预设（默认）
-bifu-cli config init
-
-# 使用 dev 预设
+# 使用 dev 预设（默认）
 bifu-cli config init --env dev
 
-# 创建自定义 profile 并使用 staging 预设
-bifu-cli config init --profile myenv --env staging
+# 使用 staging 预设
+bifu-cli config init --env staging
+
+# 创建自定义 profile 并使用 prod 预设
+bifu-cli config init --profile myprod --env prod
 ```
 
 **环境预设地址**
 
 | 环境 | Base URL | WebSocket |
 |------|----------|-----------|
-| `local` | `http://localhost:8000` | `ws://localhost:8000` |
 | `dev` | `https://fxapi.bifu.dev` | `wss://fxapi.bifu.dev` |
 | `staging` | `https://fxapi.staging.bifu.dev` | `wss://fxapi.staging.bifu.dev` |
 | `prod` | `https://fxapi.bifu.dev` | `wss://fxapi.bifu.dev` |
@@ -254,6 +253,42 @@ bifu-cli contract order modify --order-id 123456789 --size 2
 
 ---
 
+## auth — Cookie 认证工具
+
+外汇（forex）和支付（payment）接口使用 `user_auth_name` Cookie 认证。使用 `auth cookie` 命令快速生成并保存 Cookie，无需手动从浏览器复制。
+
+### 生成并保存 Cookie
+
+```bash
+# 生成 cookie 并保存到当前激活 profile（env 自动从 profile 名推断）
+bifu-cli auth cookie set 620640738
+
+# 指定 env
+bifu-cli auth cookie set 620640738 --env dev
+bifu-cli auth cookie set 620640738 --env staging
+
+# 针对特定 profile 操作
+bifu-cli --profile staging auth cookie set 620640738 --env staging
+```
+
+### 仅生成（不保存）
+
+```bash
+bifu-cli auth cookie encode 620640738 --env dev
+```
+
+### 解码 Cookie
+
+```bash
+bifu-cli auth cookie decode "yHjCFUQ2jFBQ..."
+# 输出:
+#   uid : 620640738
+#   env : dev
+#   raw : 620640738=dev=C8DXTLEX=1770620640
+```
+
+---
+
 ## payment — 资金管理
 
 ### 查询余额
@@ -284,7 +319,7 @@ bifu-cli payment transfer \
 
 ## forex — 外汇(MT5)交易
 
-> 外汇接口通过 Cookie 认证，需先执行 `bifu-cli config set --auth-cookie "..."` 。
+> 外汇接口通过 Cookie 认证，需先执行 `bifu-cli auth cookie set <uid>` 生成并保存 Cookie。
 
 ### 订单类型
 
@@ -443,13 +478,14 @@ bifu-cli ws pushgw --pretty
 
 ```bash
 # 创建多个环境 profile
-bifu-cli config init --profile local --env local
 bifu-cli config init --profile dev --env dev
+bifu-cli config init --profile staging --env staging
 bifu-cli config init --profile prod --env prod
 
-# 各 profile 设置不同的认证信息
-bifu-cli config set --profile dev --auth-cookie "dev-cookie"
-bifu-cli config set --profile prod --auth-cookie "prod-cookie"
+# 各 profile 设置 Cookie（根据实际 UID 替换）
+bifu-cli --profile dev auth cookie set 620640738
+bifu-cli --profile staging auth cookie set 620640738 --env staging
+bifu-cli --profile prod auth cookie set 620640738 --env prod
 
 # 使用指定 profile 执行命令（不切换默认值）
 bifu-cli -p dev spot balance

@@ -51,13 +51,13 @@ func Decode(cookie string) (uid int64, env string, raw string, err error) {
 }
 
 // EnvFromProfileName infers the cookie env string from a profile name.
-// Profiles named "dev", "staging", "prod" map directly; anything else → "local".
+// Profiles named "dev", "staging", "prod" map directly; anything else → "dev".
 func EnvFromProfileName(profileName string) string {
 	switch profileName {
-	case "dev", "staging", "prod":
+	case "staging", "prod":
 		return profileName
 	default:
-		return "local"
+		return "dev"
 	}
 }
 

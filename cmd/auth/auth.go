@@ -63,8 +63,8 @@ Use ` + "`" + `auth cookie set` + "`" + ` to generate AND save to your active pr
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&env, "env", "local",
-		"Cookie environment tag: local | dev | staging | prod")
+	cmd.Flags().StringVar(&env, "env", "dev",
+		"Cookie environment tag: dev | staging | prod")
 	return cmd
 }
 
@@ -100,7 +100,7 @@ func newCookieSetCmd(load LoadFn) *cobra.Command {
 active profile's auth_cookie field.
 
 The --env flag defaults to the profile name (dev/staging/prod map directly,
-everything else maps to "local").`,
+anything else defaults to "dev").`,
 		Example: `  bifu-cli auth cookie set 109150807
   bifu-cli auth cookie set 109150807 --env dev
   bifu-cli --profile dev auth cookie set 109150807`,
@@ -125,18 +125,6 @@ everything else maps to "local").`,
 			// Infer env from profile name if not explicitly set
 			if !cmd.Flags().Changed("env") {
 				env = cookie.EnvFromProfileName(strings.ToLower(profile.Name))
-				if env == "local" && profile.Name != "default" && profile.Name != "local" {
-					// Try to infer from base URL
-					base := strings.ToLower(profile.BaseURL)
-					switch {
-					case strings.Contains(base, "dev"):
-						env = "dev"
-					case strings.Contains(base, "staging"):
-						env = "staging"
-					case strings.Contains(base, "prod") || (!strings.Contains(base, "dev") && !strings.Contains(base, "local") && !strings.Contains(base, "staging")):
-						env = "local"
-					}
-				}
 			}
 
 			val := cookie.Generate(uid, env)
@@ -156,7 +144,7 @@ everything else maps to "local").`,
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&env, "env", "local",
-		"Cookie environment tag: local | dev | staging | prod")
+	cmd.Flags().StringVar(&env, "env", "dev",
+		"Cookie environment tag: dev | staging | prod")
 	return cmd
 }
