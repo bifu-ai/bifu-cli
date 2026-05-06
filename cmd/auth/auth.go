@@ -8,9 +8,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"bifu-cli/pkg/clifconfig"
-	"bifu-cli/pkg/cookie"
-	"bifu-cli/pkg/output"
+	"bifu-cli/internal/clifconfig"
+	"bifu-cli/internal/cookie"
+	"bifu-cli/internal/output"
 )
 
 // LoadFn resolves the active profile and printer.

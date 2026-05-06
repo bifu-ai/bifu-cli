@@ -9,8 +9,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"bifu-cli/pkg/clifconfig"
-	"bifu-cli/pkg/output"
+	"bifu-cli/internal/clifconfig"
+	"bifu-cli/internal/output"
 )
 
 // NewConfigCmd builds the `config` command tree.
@@ -246,6 +246,8 @@ func newInitCmd() *cobra.Command {
 
 			// Apply environment-specific defaults
 			switch strings.ToLower(env) {
+			case "custom":
+				// No preset URLs — user fills in manually via config set
 			case "staging":
 				p.BaseURL = "https://fxapi.staging.bifu.dev"
 				p.WebSocketURL = "wss://fxapi.staging.bifu.dev"
@@ -273,7 +275,7 @@ func newInitCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&profile, "profile", "default", "Profile name to initialise")
-	cmd.Flags().StringVar(&env, "env", "dev", "Environment preset: dev | staging | prod")
+	cmd.Flags().StringVar(&env, "env", "dev", "Environment preset: custom | dev | staging | prod")
 	return cmd
 }
 

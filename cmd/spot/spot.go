@@ -6,9 +6,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	spotapi "bifu-cli/pkg/api/spot"
-	"bifu-cli/pkg/clifconfig"
-	"bifu-cli/pkg/output"
+	spotapi "bifu-cli/internal/api/spot"
+	"bifu-cli/internal/clifconfig"
+	"bifu-cli/internal/output"
 )
 
 // LoadFn resolves the active profile and printer.

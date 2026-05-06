@@ -5,8 +5,8 @@ package payment
 import (
 	"fmt"
 
-	"bifu-cli/pkg/client"
-	"bifu-cli/pkg/clifconfig"
+	"bifu-cli/internal/client"
+	"bifu-cli/internal/clifconfig"
 )
 
 // Client is the Payment API client (cookie auth).

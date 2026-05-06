@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"strconv"
 
-	"bifu-cli/pkg/client"
-	"bifu-cli/pkg/clifconfig"
+	"bifu-cli/internal/client"
+	"bifu-cli/internal/clifconfig"
 )
 
 // Client is the Contract trading API client.

@@ -2,7 +2,7 @@
 
 BifuFX 交易平台命令行工具，支持现货、合约、外汇(MT5)交易，以及 WebSocket 实时行情订阅。
 
-设计灵感来自 [Solana CLI](https://docs.solanalabs.com/cli) 和 [NEAR CLI](https://docs.near.org/tools/near-cli)，采用多 Profile 配置管理，可在 local/dev/staging/prod 环境之间快速切换。
+设计灵感来自 [Solana CLI](https://docs.solanalabs.com/cli)，采用多 Profile 配置管理，可在 custom/dev/staging/prod 环境之间快速切换。
 
 ---
 
@@ -283,9 +283,9 @@ bifu-cli --profile dev auth login --username user@example.com --password 'MyPass
 
 ### auth cookie — 本地 Cookie 工具
 
-> 仅适用于本地 K8s 环境（`local`），Dev/Staging/Prod 需使用 `auth login`。
+> 仅适用于本地 K8s 环境（`custom`），Dev/Staging/Prod 需使用 `auth login`。
 
-#### 生成并保存 Cookie（local 环境）
+#### 生成并保存 Cookie（custom 环境）
 
 ```bash
 # 生成 cookie 并保存到当前激活 profile（env 自动从 profile 名推断）

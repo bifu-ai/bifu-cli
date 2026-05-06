@@ -22,7 +22,7 @@ import (
 const cookieKey = "98718decodeworld"
 
 // Generate creates a user_auth_name cookie value for the given uid and environment.
-// env should be one of: local, dev, staging, prod.
+// env should be one of: custom, dev, staging, prod.
 func Generate(uid int64, env string) string {
 	ts := strconv.FormatInt(time.Now().Unix(), 10)
 	salt := randomSalt(8)
@@ -51,10 +51,10 @@ func Decode(cookie string) (uid int64, env string, raw string, err error) {
 }
 
 // EnvFromProfileName infers the cookie env string from a profile name.
-// Profiles named "dev", "staging", "prod" map directly; anything else → "dev".
+// Profiles named "custom", "dev", "staging", "prod" map directly; anything else → "dev".
 func EnvFromProfileName(profileName string) string {
 	switch profileName {
-	case "dev", "staging", "prod":
+	case "custom", "dev", "staging", "prod":
 		return profileName
 	default:
 		return "dev"

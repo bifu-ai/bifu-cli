@@ -9,9 +9,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	paymentapi "bifu-cli/pkg/api/payment"
-	"bifu-cli/pkg/clifconfig"
-	"bifu-cli/pkg/output"
+	paymentapi "bifu-cli/internal/api/payment"
+	"bifu-cli/internal/clifconfig"
+	"bifu-cli/internal/output"
 )
 
 // LoadFn resolves the active profile and printer.

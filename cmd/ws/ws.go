@@ -13,9 +13,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	wsclient "bifu-cli/pkg/client"
-	"bifu-cli/pkg/clifconfig"
-	"bifu-cli/pkg/output"
+	wsclient "bifu-cli/internal/client"
+	"bifu-cli/internal/clifconfig"
+	"bifu-cli/internal/output"
 )
 
 // LoadFn resolves the active profile and printer.

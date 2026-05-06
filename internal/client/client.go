@@ -16,7 +16,7 @@ import (
 	"sync"
 	"time"
 
-	"bifu-cli/pkg/clifconfig"
+	"bifu-cli/internal/clifconfig"
 )
 
 // ── Auth ──────────────────────────────────────────────────────────────────────

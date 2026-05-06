@@ -7,9 +7,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	contractapi "bifu-cli/pkg/api/contract"
-	"bifu-cli/pkg/clifconfig"
-	"bifu-cli/pkg/output"
+	contractapi "bifu-cli/internal/api/contract"
+	"bifu-cli/internal/clifconfig"
+	"bifu-cli/internal/output"
 )
 
 // LoadFn resolves the active profile and printer.

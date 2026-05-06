@@ -15,8 +15,8 @@ import (
 	"bifu-cli/cmd/payment"
 	"bifu-cli/cmd/spot"
 	"bifu-cli/cmd/ws"
-	"bifu-cli/pkg/clifconfig"
-	"bifu-cli/pkg/output"
+	"bifu-cli/internal/clifconfig"
+	"bifu-cli/internal/output"
 )
 
 const version = "1.0.0"
@@ -50,8 +50,8 @@ func Execute() error {
 type LoadFn = func() (*clifconfig.Profile, *output.Printer, error)
 
 func init() {
-	rootCmd.PersistentFlags().StringVarP(&globalProfile, "profile", "p", "default",
-		"Config profile to use (see: bifu-cli config list)")
+	rootCmd.PersistentFlags().StringVarP(&globalProfile, "profile", "p", "",
+		"Config profile to use (see: bifu-cli config list); defaults to active profile")
 	rootCmd.PersistentFlags().StringVarP(&globalOutput, "output", "o", "table",
 		"Output format: table | json | plain")
 	rootCmd.PersistentFlags().BoolVarP(&globalVerbose, "verbose", "v", false,
@@ -75,13 +75,15 @@ func loadCtx() (*clifconfig.Profile, *output.Printer, error) {
 		return nil, nil, fmt.Errorf("load config: %w", err)
 	}
 
-	if globalProfile != "" && globalProfile != "default" {
+	// If --profile was explicitly set, switch to that profile
+	if globalProfile != "" {
 		if err := cfg.SetActive(globalProfile); err != nil {
-				fmt.Fprintf(os.Stderr, "warning: profile %q not found, using defaults\n", globalProfile)
+			fmt.Fprintf(os.Stderr, "warning: profile %q not found, using defaults\n", globalProfile)
 			cfg.EnsureProfile(globalProfile)
 			cfg.ActiveProfile = globalProfile
 		}
 	}
+	// else: use cfg.ActiveProfile from config file (set via `config use`)
 
 	profile := cfg.Active()
 	printer := output.NewPrinter(output.Format(globalOutput), globalVerbose)
@@ -93,7 +95,7 @@ func newVersionCmd() *cobra.Command {
 		Use:   "version",
 		Short: "Print bifu-cli version",
 		Run: func(cmd *cobra.Command, args []string) {
-				fmt.Printf("bifu-cli %s\n", version)
+			fmt.Printf("bifu-cli %s\n", version)
 		},
 	}
 }

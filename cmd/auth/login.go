@@ -13,7 +13,7 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
-	"bifu-cli/pkg/clifconfig"
+	"bifu-cli/internal/clifconfig"
 )
 
 // newLoginCmd builds the `auth login` subcommand.
