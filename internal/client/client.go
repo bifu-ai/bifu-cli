@@ -81,9 +81,15 @@ func SignAPIKey(secretKey, timestamp, method, path, body string) string {
 // ApplySpot sets Spot API-Key auth headers on an existing request.
 // Direct map assignment is used to bypass Go's header canonicalization so that
 // "Decode-MM-Auth-Access-Key" is sent verbatim (not "Decode-Mm-Auth-Access-Key").
+// Falls back to cookie auth when no API key is configured.
 func (am *AuthManager) ApplySpot(req *http.Request, bodyStr string) {
 	am.mu.RLock()
 	defer am.mu.RUnlock()
+	if am.profile.SpotAccessKey == "" {
+		// No API key configured — fall back to cookie auth (same cookie used by forex/payment)
+		am.applyCookieLocked(req)
+		return
+	}
 	ts := strconv.FormatInt(time.Now().UnixMilli(), 10)
 	sig := SignAPIKey(am.profile.SpotSecretKey, ts, req.Method, req.URL.Path, bodyStr)
 	req.Header["Decode-MM-Auth-Access-Key"] = []string{am.profile.SpotAccessKey}
@@ -96,6 +102,7 @@ func (am *AuthManager) ApplySpot(req *http.Request, bodyStr string) {
 // ApplyContract sets Contract API-Key auth headers.
 // Direct map assignment is used to bypass Go's header canonicalization so that
 // "Decode-MM-Auth-Access-Key" is sent verbatim (not "Decode-Mm-Auth-Access-Key").
+// Falls back to cookie auth when no API key is configured.
 func (am *AuthManager) ApplyContract(req *http.Request, bodyStr string) {
 	am.mu.RLock()
 	defer am.mu.RUnlock()
@@ -104,6 +111,11 @@ func (am *AuthManager) ApplyContract(req *http.Request, bodyStr string) {
 	if key == "" {
 		key = am.profile.SpotAccessKey
 		sec = am.profile.SpotSecretKey
+	}
+	if key == "" {
+		// No API key configured — fall back to cookie auth
+		am.applyCookieLocked(req)
+		return
 	}
 	ts := strconv.FormatInt(time.Now().UnixMilli(), 10)
 	sig := SignAPIKey(sec, ts, req.Method, req.URL.Path, bodyStr)
@@ -118,6 +130,10 @@ func (am *AuthManager) ApplyContract(req *http.Request, bodyStr string) {
 func (am *AuthManager) ApplyCookie(req *http.Request) {
 	am.mu.RLock()
 	defer am.mu.RUnlock()
+	am.applyCookieLocked(req)
+}
+
+func (am *AuthManager) applyCookieLocked(req *http.Request) {
 	if am.profile.AuthCookie != "" {
 		req.Header.Set("Cookie", "user_auth_name="+am.profile.AuthCookie)
 	}

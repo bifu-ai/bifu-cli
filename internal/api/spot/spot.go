@@ -216,10 +216,8 @@ func (c *Client) ListOrderHistory(symbolID string, limit int) ([]Order, error) {
 }
 
 // GetBalance returns the spot account balance list.
+// Uses cookie auth when no spot API key is configured.
 func (c *Client) GetBalance() ([]BalanceItem, error) {
-	if c.profile.Auth.SpotAccessKey == "" {
-		return nil, fmt.Errorf("spot API key not configured; run: bifu-cli config set --spot-key KEY --spot-secret SECRET")
-	}
 	u := c.profile.GetPrivateURL("/spot/account/getAccountAsset")
 	raw, err := c.http.GetSpot(u, nil)
 	if err != nil {
