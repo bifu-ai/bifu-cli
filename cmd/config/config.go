@@ -243,7 +243,13 @@ func newInitCmd() *cobra.Command {
 
 			// Apply environment-specific defaults
 			switch strings.ToLower(env) {
-			case "dev":
+			case "staging":
+				p.BaseURL = "https://fxapi.staging.bifu.dev"
+				p.WebSocketURL = "wss://fxapi.staging.bifu.dev"
+			case "prod":
+				p.BaseURL = "https://fxapi.bifu.com"
+				p.WebSocketURL = "wss://fxapi.bifu.com"
+			default: // dev (and explicit "dev")
 				p.BaseURL = "https://fxapi.bifu.dev"
 				p.WebSocketURL = "wss://fxapi.bifu.dev"
 				p.Forex.HTTPEndpoint = "https://api.dev.mtapi.org"
@@ -251,15 +257,6 @@ func newInitCmd() *cobra.Command {
 				p.Forex.WSPath = "/mt5/Events"
 				p.Pushgw.WSEndpoint = "wss://api.bifu.dev"
 				p.Pushgw.WSPath = "/pushgw/ws"
-			case "staging":
-				p.BaseURL = "https://fxapi.staging.bifu.dev"
-				p.WebSocketURL = "wss://fxapi.staging.bifu.dev"
-			case "prod":
-				p.BaseURL = "https://fxapi.bifu.com"
-				p.WebSocketURL = "wss://fxapi.bifu.com"
-			default: // local
-				p.BaseURL = "http://localhost:8000"
-				p.WebSocketURL = "ws://localhost:8000"
 			}
 
 			if err := cfg.Save(); err != nil {
@@ -273,7 +270,7 @@ func newInitCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&profile, "profile", "default", "Profile name to initialise")
-	cmd.Flags().StringVar(&env, "env", "local", "Environment preset: local | dev | staging | prod")
+	cmd.Flags().StringVar(&env, "env", "dev", "Environment preset: dev | staging | prod")
 	return cmd
 }
 

@@ -54,7 +54,7 @@ func Decode(cookie string) (uid int64, env string, raw string, err error) {
 // Profiles named "dev", "staging", "prod" map directly; anything else → "dev".
 func EnvFromProfileName(profileName string) string {
 	switch profileName {
-	case "staging", "prod":
+	case "dev", "staging", "prod":
 		return profileName
 	default:
 		return "dev"
