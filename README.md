@@ -121,6 +121,69 @@ bifu-cli config delete myenv
 
 ---
 
+## auth — 认证管理
+
+外汇（forex）和支付（payment）接口使用 `user_auth_name` Cookie 认证。
+
+### auth login — 邮箱密码登录（推荐）
+
+通过账号密码 + 邮件验证码完成登录，Cookie 自动写入 profile，无需手动复制。
+
+```bash
+# 交互式登录（密码不显示在屏幕）
+bifu-cli --profile dev auth login
+
+# 预填用户名，密码仍隐藏输入
+bifu-cli --profile dev auth login --username user@example.com
+
+# 完全非交互式（CI 场景）
+bifu-cli --profile dev auth login --username user@example.com --password 'MyPass'
+```
+
+**登录流程：**
+1. 输入邮箱和密码（密码不回显）
+2. 服务端发送验证码到邮箱
+3. 输入收到的验证码
+4. Cookie 自动保存到 profile 的 `auth_cookie` 字段（有效期 30 天）
+
+> **注意**：Dev 环境验证码固定为 `123456`。
+
+### auth cookie — 本地 Cookie 工具
+
+> 仅适用于本地 K8s 环境（`custom`），Dev/Staging/Prod 需使用 `auth login`。
+
+#### 生成并保存 Cookie（custom 环境）
+
+```bash
+# 生成 cookie 并保存到当前激活 profile（env 自动从 profile 名推断）
+bifu-cli auth cookie set 620640738
+
+# 指定 env
+bifu-cli auth cookie set 620640738 --env dev
+bifu-cli auth cookie set 620640738 --env staging
+
+# 针对特定 profile 操作
+bifu-cli --profile staging auth cookie set 620640738 --env staging
+```
+
+#### 仅生成（不保存）
+
+```bash
+bifu-cli auth cookie encode 620640738 --env dev
+```
+
+#### 解码 Cookie
+
+```bash
+bifu-cli auth cookie decode "yHjCFUQ2jFBQ..."
+# 输出:
+#   uid : 620640738
+#   env : dev
+#   raw : 620640738=dev=C8DXTLEX=1770620640
+```
+
+---
+
 ## spot — 现货交易
 
 ### 查询余额
@@ -250,69 +313,6 @@ bifu-cli contract order modify --order-id 123456789 --price 96000
 
 # 修改数量
 bifu-cli contract order modify --order-id 123456789 --size 2
-```
-
----
-
-## auth — 认证管理
-
-外汇（forex）和支付（payment）接口使用 `user_auth_name` Cookie 认证。
-
-### auth login — 邮箱密码登录（推荐）
-
-通过账号密码 + 邮件验证码完成登录，Cookie 自动写入 profile，无需手动复制。
-
-```bash
-# 交互式登录（密码不显示在屏幕）
-bifu-cli --profile dev auth login
-
-# 预填用户名，密码仍隐藏输入
-bifu-cli --profile dev auth login --username user@example.com
-
-# 完全非交互式（CI 场景）
-bifu-cli --profile dev auth login --username user@example.com --password 'MyPass'
-```
-
-**登录流程：**
-1. 输入邮箱和密码（密码不回显）
-2. 服务端发送验证码到邮箱
-3. 输入收到的验证码
-4. Cookie 自动保存到 profile 的 `auth_cookie` 字段（有效期 30 天）
-
-> **注意**：Dev 环境验证码固定为 `123456`。
-
-### auth cookie — 本地 Cookie 工具
-
-> 仅适用于本地 K8s 环境（`custom`），Dev/Staging/Prod 需使用 `auth login`。
-
-#### 生成并保存 Cookie（custom 环境）
-
-```bash
-# 生成 cookie 并保存到当前激活 profile（env 自动从 profile 名推断）
-bifu-cli auth cookie set 620640738
-
-# 指定 env
-bifu-cli auth cookie set 620640738 --env dev
-bifu-cli auth cookie set 620640738 --env staging
-
-# 针对特定 profile 操作
-bifu-cli --profile staging auth cookie set 620640738 --env staging
-```
-
-#### 仅生成（不保存）
-
-```bash
-bifu-cli auth cookie encode 620640738 --env dev
-```
-
-#### 解码 Cookie
-
-```bash
-bifu-cli auth cookie decode "yHjCFUQ2jFBQ..."
-# 输出:
-#   uid : 620640738
-#   env : dev
-#   raw : 620640738=dev=C8DXTLEX=1770620640
 ```
 
 ---
