@@ -83,16 +83,21 @@ func newWSConfigCmd(load LoadFn) *cobra.Command {
 				return err
 			}
 			p := cfg.Active()
-			if cmd.Flags().Changed("market-url") {
+			if cmd.Flags().Changed("market-url") && cmd.Flags().Changed("ws-market") {
+				// Both provided: combine into full URL stored in WSMarket
+				p.WSMarket = marketURL + wsMarket
+			} else if cmd.Flags().Changed("market-url") {
 				p.WebSocketURL = marketURL
-			}
-			if cmd.Flags().Changed("private-url") {
-				p.WebSocketURL = privateURL
-			}
-			if cmd.Flags().Changed("ws-market") {
+			} else if cmd.Flags().Changed("ws-market") {
 				p.WSMarket = wsMarket
 			}
-			if cmd.Flags().Changed("ws-private") {
+			if cmd.Flags().Changed("private-url") && cmd.Flags().Changed("ws-private") {
+				// Both provided: combine into full URL
+				p.WSPrivate = privateURL + wsPrivate
+			} else if cmd.Flags().Changed("private-url") {
+				// Full URL goes directly to WSPrivate (never touches shared WebSocketURL)
+				p.WSPrivate = privateURL
+			} else if cmd.Flags().Changed("ws-private") {
 				p.WSPrivate = wsPrivate
 			}
 			if cmd.Flags().Changed("pushgw-ws") {
