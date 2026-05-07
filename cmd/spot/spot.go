@@ -3,6 +3,7 @@ package spot
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -53,6 +54,9 @@ func newOrderCreate(load LoadFn) *cobra.Command {
 			c, pr, err := newclient(load)
 			if err != nil {
 				return err
+			}
+			if clientID == "" {
+				clientID = fmt.Sprintf("cli-%d", time.Now().UnixMilli())
 			}
 			resp, err := c.CreateOrder(&spotapi.CreateOrderReq{
 				SymbolID:      symbol,
