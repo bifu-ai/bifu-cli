@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -213,12 +214,22 @@ func (p *Profile) GetPaymentURL(path string) string {
 }
 
 // GetWSMarketURL builds the full WebSocket URL for market data.
+// If WSMarket is already a full URL (starts with ws:// or wss://), it is returned as-is;
+// otherwise it is appended to WebSocketURL.
 func (p *Profile) GetWSMarketURL() string {
+	if strings.HasPrefix(p.WSMarket, "ws://") || strings.HasPrefix(p.WSMarket, "wss://") {
+		return p.WSMarket
+	}
 	return p.WebSocketURL + p.WSMarket
 }
 
 // GetWSPrivateURL builds the full WebSocket URL for private trading events.
+// If WSPrivate is already a full URL (starts with ws:// or wss://), it is returned as-is;
+// otherwise it is appended to WebSocketURL.
 func (p *Profile) GetWSPrivateURL() string {
+	if strings.HasPrefix(p.WSPrivate, "ws://") || strings.HasPrefix(p.WSPrivate, "wss://") {
+		return p.WSPrivate
+	}
 	return p.WebSocketURL + p.WSPrivate
 }
 
