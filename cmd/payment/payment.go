@@ -3,7 +3,6 @@ package payment
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -130,11 +129,8 @@ Account types:
 			if err != nil {
 				return err
 			}
-			fromKey := fmt.Sprintf("%s", fromStr)
-			toKey := fmt.Sprintf("%s", toStr)
-			// uppercase
-			fromKey = strings.ToUpper(fromKey)
-			toKey = strings.ToUpper(toKey)
+			fromKey := strings.ToUpper(fromStr)
+			toKey := strings.ToUpper(toStr)
 
 			fromType, ok := acctType[fromKey]
 			if !ok {
@@ -216,8 +212,3 @@ func newForexAccountsCmd(load LoadFn) *cobra.Command {
 }
 
 func mustBool(v bool, _ error) bool { return v }
-
-// fmtFloat is a helper to format a float64 as string for display.
-func fmtFloat(v float64) string {
-	return strconv.FormatFloat(v, 'f', -1, 64)
-}

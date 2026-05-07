@@ -246,26 +246,6 @@ func (c *Client) Transfer(req *TransferReq) (*TransferResp, error) {
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
-// tryParseOrders handles both {"orders":[...]} and [...] response shapes.
-func tryParseOrders(raw []byte, dst *[]Order) error {
-	// Try direct parse via standard APIResponse wrapper
-	if err := client.ParseAPIResponse(raw, dst); err == nil {
-		return nil
-	}
-	// Fallback: maybe data is wrapped in {orders:[...]}
-	var envelope struct {
-		Code string `json:"code"`
-		Data struct {
-			Orders []Order `json:"orders"`
-		} `json:"data"`
-	}
-	if err := json.Unmarshal(raw, &envelope); err != nil {
-		return fmt.Errorf("parse orders: %w (body: %.200s)", err, raw)
-	}
-	*dst = envelope.Data.Orders
-	return nil
-}
-
 // parsePageDataOrders parses a paginated API response and extracts orders from dataList.
 func parsePageDataOrders(raw []byte) ([]Order, error) {
 	var wrapper struct {

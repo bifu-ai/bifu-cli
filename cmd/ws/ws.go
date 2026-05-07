@@ -245,7 +245,7 @@ Three subscription modes (can be combined):
 			}
 			url := p.GetPushgwWSURL()
 			if url == "" {
-				return fmt.Errorf("pushgw WebSocket URL not configured — run: bifu-cli ws config set --pushgw-ws wss://...")
+				return fmt.Errorf("pushgw WebSocket URL not configured (run: bifu-cli ws config set --pushgw-ws <url>)")
 			}
 			pr.Header("Pushgw WebSocket: " + url)
 			if marketWatch {
@@ -401,30 +401,6 @@ func streamPrivateMessages(ws *wsclient.WSClient, pr *output.Printer, pretty boo
 			if json.Unmarshal(msg, &m) == nil && m.Type == "ping" {
 				_ = ws.WriteJSON(map[string]string{"type": "pong", "time": m.Time})
 				continue
-			}
-			printMessage(msg, pr, pretty)
-		}
-	}
-}
-
-// streamMessages reads from ws.Messages() until Ctrl-C or ws closes.
-func streamMessages(ws *wsclient.WSClient, pr *output.Printer, pretty bool) error {
-	sig := make(chan os.Signal, 1)
-	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
-
-	ticker := time.NewTicker(30 * time.Second)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-sig:
-			fmt.Println("\nDisconnected.")
-			return nil
-		case <-ticker.C:
-			_ = ws.WriteJSON(map[string]string{"type": "ping"})
-		case msg, ok := <-ws.Messages():
-			if !ok {
-				return fmt.Errorf("WebSocket connection closed")
 			}
 			printMessage(msg, pr, pretty)
 		}
