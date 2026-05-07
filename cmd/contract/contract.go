@@ -308,7 +308,7 @@ func newAccountCmd(load LoadFn) *cobra.Command {
 				{Key: "Status", Value: info.Status},
 			})
 			if len(info.Assets) > 0 {
-				fmt.Fprintln(cmd.OutOrStdout(), "\nAssets:")
+				pr.Header("Assets:")
 				rows := make([][]string, 0, len(info.Assets))
 				for _, a := range info.Assets {
 					if a.AccountEquity == "0" && a.AccountAvailable == "0" {
@@ -321,7 +321,7 @@ func newAccountCmd(load LoadFn) *cobra.Command {
 				if len(rows) > 0 {
 					pr.PrintTable([]string{"COIN", "EQUITY", "AVAILABLE", "USED", "UNREALIZED PNL"}, rows)
 				} else {
-					fmt.Fprintln(cmd.OutOrStdout(), "  No funded assets.")
+					pr.Line("  No funded assets.")
 				}
 			}
 			return nil

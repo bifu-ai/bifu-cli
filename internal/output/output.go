@@ -56,9 +56,23 @@ func (p *Printer) PrintJSON(v interface{}) {
 	_ = enc.Encode(v)
 }
 
-// PrintTable renders rows as an ASCII table.
-// headers: column titles; rows: each row is a []string.
+// PrintTable renders rows as an ASCII table, or as a JSON array of objects
+// when the format is JSON. headers are used as object keys in JSON mode.
 func (p *Printer) PrintTable(headers []string, rows [][]string) {
+	if p.Format == FormatJSON {
+		out := make([]map[string]string, 0, len(rows))
+		for _, row := range rows {
+			obj := make(map[string]string, len(headers))
+			for i, h := range headers {
+				if i < len(row) {
+					obj[h] = row[i]
+				}
+			}
+			out = append(out, obj)
+		}
+		p.PrintJSON(out)
+		return
+	}
 	tbl := tablewriter.NewWriter(p.Out)
 	tbl.SetHeader(headers)
 	tbl.SetBorder(false)
@@ -75,8 +89,17 @@ func (p *Printer) PrintTable(headers []string, rows [][]string) {
 	tbl.Render()
 }
 
-// PrintKV renders key-value pairs (for single object display).
+// PrintKV renders key-value pairs as aligned text, or as a JSON object
+// when the format is JSON.
 func (p *Printer) PrintKV(pairs []KV) {
+	if p.Format == FormatJSON {
+		obj := make(map[string]string, len(pairs))
+		for _, kv := range pairs {
+			obj[kv.Key] = kv.Value
+		}
+		p.PrintJSON(obj)
+		return
+	}
 	maxKey := 0
 	for _, kv := range pairs {
 		if len(kv.Key) > maxKey {
@@ -112,12 +135,18 @@ func (p *Printer) Log(msg string, args ...interface{}) {
 	}
 }
 
-// Header prints a section header.
+// Header prints a section header. Suppressed in JSON mode.
 func (p *Printer) Header(msg string) {
+	if p.Format == FormatJSON {
+		return
+	}
 	fmt.Fprintln(p.Out, "\n"+Bold(msg))
 }
 
-// Line prints a plain line.
+// Line prints a plain line. Suppressed in JSON mode.
 func (p *Printer) Line(msg string, args ...interface{}) {
+	if p.Format == FormatJSON {
+		return
+	}
 	fmt.Fprintln(p.Out, fmt.Sprintf(msg, args...))
 }
