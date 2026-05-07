@@ -4,6 +4,7 @@ package payment
 import (
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -23,6 +24,7 @@ func NewPaymentCmd(load LoadFn) *cobra.Command {
 	}
 	cmd.AddCommand(newBalanceCmd(load))
 	cmd.AddCommand(newTransferCmd(load))
+	cmd.AddCommand(newUnifiedTransferCmd(load))
 	cmd.AddCommand(newForexAccountsCmd(load))
 	return cmd
 }
@@ -181,6 +183,97 @@ Direction:
 	cmd.Flags().Int64Var(&forexInternalID, "forex-id", 0, "Forex internal account ID (overrides --login-id lookup)")
 	cmd.Flags().Int64Var(&savingAccountID, "saving-id", 0, "Saving account ID (optional, auto-detected from --currency)")
 	_ = cmd.MarkFlagRequired("direction")
+	_ = cmd.MarkFlagRequired("amount")
+	return cmd
+}
+
+// ── payment unified-transfer ──────────────────────────────────────────────────
+
+func newUnifiedTransferCmd(load LoadFn) *cobra.Command {
+	var fromStr, toStr, amount, currency, comment string
+	var coinID int32
+
+	acctType := map[string]paymentapi.TransferAccountType{
+		"SAVING":   paymentapi.TransferAccountTypeSaving,
+		"FOREX":    paymentapi.TransferAccountTypeForexMT5,
+		"FUNDING":  paymentapi.TransferAccountTypeCryptoFunding,
+		"SPOT":     paymentapi.TransferAccountTypeCryptoSpot,
+		"CONTRACT": paymentapi.TransferAccountTypeCryptoFuture,
+		"EARN":     paymentapi.TransferAccountTypeEarn,
+	}
+
+	cmd := &cobra.Command{
+		Use:   "unified-transfer",
+		Short: "Universal fund transfer between any two accounts",
+		Long: `Transfer funds between any two account types using the unified transfer API.
+
+Account types:
+  SAVING    Fiat saving/wallet account (requires --currency)
+  FOREX     MT5 forex account          (requires --currency)
+  FUNDING   Crypto funding account     (requires --coin-id)
+  SPOT      Crypto spot account        (requires --coin-id)
+  CONTRACT  Crypto futures account     (requires --coin-id)
+  EARN      Earn/financial account     (requires --coin-id or --currency)`,
+		Example: `  bifu-cli payment unified-transfer --from SAVING --to FOREX     --amount 100 --currency USD
+  bifu-cli payment unified-transfer --from FOREX  --to SAVING    --amount 100 --currency USD
+  bifu-cli payment unified-transfer --from SAVING --to SPOT      --amount 100 --currency USD
+  bifu-cli payment unified-transfer --from FUNDING --to SPOT     --amount 10  --coin-id 1
+  bifu-cli payment unified-transfer --from SPOT   --to CONTRACT  --amount 10  --coin-id 1
+  bifu-cli payment unified-transfer --from CONTRACT --to FUNDING --amount 10  --coin-id 1`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			c, pr, err := newClient(load)
+			if err != nil {
+				return err
+			}
+			fromKey := fmt.Sprintf("%s", fromStr)
+			toKey := fmt.Sprintf("%s", toStr)
+			// uppercase
+			fromKey = strings.ToUpper(fromKey)
+			toKey = strings.ToUpper(toKey)
+
+			fromType, ok := acctType[fromKey]
+			if !ok {
+				return fmt.Errorf("unknown account type %q; valid: SAVING, FOREX, FUNDING, SPOT, CONTRACT, EARN", fromStr)
+			}
+			toType, ok2 := acctType[toKey]
+			if !ok2 {
+				return fmt.Errorf("unknown account type %q; valid: SAVING, FOREX, FUNDING, SPOT, CONTRACT, EARN", toStr)
+			}
+			if fromType == toType {
+				return fmt.Errorf("--from and --to must be different account types")
+			}
+
+			req := &paymentapi.UnifiedTransferReq{
+				FromAccountType: fromType,
+				ToAccountType:   toType,
+				Amount:          amount,
+				Currency:        currency,
+				CoinID:          coinID,
+				Comment:         comment,
+			}
+			resp, err := c.UnifiedTransfer(req)
+			if err != nil {
+				return err
+			}
+			pr.OK("Transfer submitted")
+			pr.PrintKV([]output.KV{
+				{Key: "Ticket", Value: resp.Ticket},
+				{Key: "Status", Value: resp.Status},
+				{Key: "From Amount", Value: resp.FromAmount},
+				{Key: "To Amount", Value: resp.ToAmount},
+				{Key: "Fee", Value: resp.Fee},
+			})
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&fromStr, "from", "", "Source account type (SAVING/FOREX/FUNDING/SPOT/CONTRACT/EARN)")
+	cmd.Flags().StringVar(&toStr, "to", "", "Destination account type (SAVING/FOREX/FUNDING/SPOT/CONTRACT/EARN)")
+	cmd.Flags().StringVar(&amount, "amount", "", "Amount to transfer")
+	cmd.Flags().StringVar(&currency, "currency", "", "Currency code for fiat accounts (e.g. USD)")
+	cmd.Flags().Int32Var(&coinID, "coin-id", 0, "Coin ID for crypto accounts (e.g. 1=USDT)")
+	cmd.Flags().StringVar(&comment, "comment", "", "Optional remark")
+	_ = cmd.MarkFlagRequired("from")
+	_ = cmd.MarkFlagRequired("to")
 	_ = cmd.MarkFlagRequired("amount")
 	return cmd
 }

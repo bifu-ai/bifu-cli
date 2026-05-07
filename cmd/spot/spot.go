@@ -20,11 +20,10 @@ type LoadFn func() (*clifconfig.Profile, *output.Printer, error)
 func NewSpotCmd(load LoadFn) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "spot",
-		Short: "Spot trading (orders, balances, transfers)",
+		Short: "Spot trading (orders, balances)",
 	}
 	cmd.AddCommand(newOrderCmd(load))
 	cmd.AddCommand(newBalanceCmd(load))
-	cmd.AddCommand(newTransferCmd(load))
 	return cmd
 }
 
@@ -243,54 +242,4 @@ func newBalanceCmd(load LoadFn) *cobra.Command {
 	}
 }
 
-func newTransferCmd(load LoadFn) *cobra.Command {
-	var coinID int
-	var amount, from, to string
 
-	cmd := &cobra.Command{
-		Use:   "transfer",
-		Short: "Transfer funds between spot and contract accounts",
-		Example: `  bifu-cli spot transfer --coin-id 1 --amount 10.00 --from SPOT --to CONTRACT
-  bifu-cli spot transfer --coin-id 1 --amount 10.00 --from CONTRACT --to SPOT`,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			c, pr, err := newclient(load)
-			if err != nil {
-				return err
-			}
-			from = strings.ToUpper(from)
-			to = strings.ToUpper(to)
-
-			var transferType string
-			switch {
-			case from == "SPOT" && to == "CONTRACT":
-				transferType = "SPOT_TO_CONTRACT"
-			case from == "CONTRACT" && to == "SPOT":
-				transferType = "CONTRACT_TO_SPOT"
-			default:
-				return fmt.Errorf("invalid transfer direction: --from must be SPOT or CONTRACT, --to must be the opposite")
-			}
-
-			req := &spotapi.TransferReq{
-				CoinID:       coinID,
-				Amount:       amount,
-				FromAccount:  from,
-				ToAccount:    to,
-				TransferType: transferType,
-			}
-			resp, err := c.Transfer(req)
-			if err != nil {
-				return err
-			}
-			pr.OK("Transfer submitted: ID=%s, Status=%s", resp.TransferID, resp.Status)
-			return nil
-		},
-	}
-	cmd.Flags().IntVar(&coinID, "coin-id", 1, "Coin ID (1=USDT)")
-	cmd.Flags().StringVar(&amount, "amount", "", "Amount to transfer")
-	cmd.Flags().StringVar(&from, "from", "", "Source account: SPOT or CONTRACT")
-	cmd.Flags().StringVar(&to, "to", "", "Destination account: SPOT or CONTRACT")
-	_ = cmd.MarkFlagRequired("amount")
-	_ = cmd.MarkFlagRequired("from")
-	_ = cmd.MarkFlagRequired("to")
-	return cmd
-}

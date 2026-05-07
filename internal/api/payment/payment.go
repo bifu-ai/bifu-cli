@@ -353,3 +353,53 @@ func (c *Client) Transfer(req *TransferReq) error {
 	}
 	return client.ParsePaymentResponse(raw.Body, nil)
 }
+
+// ── Unified Transfer ──────────────────────────────────────────────────────────
+
+// TransferAccountType mirrors the proto enum TransferAccountType.
+type TransferAccountType int32
+
+const (
+	TransferAccountTypeSaving          TransferAccountType = 1
+	TransferAccountTypeForexMT5        TransferAccountType = 2
+	TransferAccountTypeCryptoFunding   TransferAccountType = 5
+	TransferAccountTypeCryptoSpot      TransferAccountType = 6
+	TransferAccountTypeCryptoFuture    TransferAccountType = 7
+	TransferAccountTypeCopyTrading     TransferAccountType = 9
+	TransferAccountTypeEarn            TransferAccountType = 11
+)
+
+// UnifiedTransferReq is the request body for POST /payment/v2/transfer.
+type UnifiedTransferReq struct {
+	FromAccountType TransferAccountType `json:"from_account_type"`
+	FromAccountID   int64               `json:"from_account_id,omitempty"`
+	ToAccountType   TransferAccountType `json:"to_account_type"`
+	ToAccountID     int64               `json:"to_account_id,omitempty"`
+	Amount          string              `json:"amount"`
+	Currency        string              `json:"currency,omitempty"`
+	CoinID          int32               `json:"coin_id,omitempty"`
+	Comment         string              `json:"comment,omitempty"`
+}
+
+// UnifiedTransferResult is the result embedded in the unified transfer response.
+type UnifiedTransferResult struct {
+	Ticket     string `json:"ticket"`
+	Status     string `json:"status"`
+	FromAmount string `json:"from_amount"`
+	ToAmount   string `json:"to_amount"`
+	Fee        string `json:"fee"`
+}
+
+// UnifiedTransfer calls POST /payment/v2/transfer (the unified transfer API).
+func (c *Client) UnifiedTransfer(req *UnifiedTransferReq) (*UnifiedTransferResult, error) {
+	u := c.profile.GetPaymentURL("/v2/transfer")
+	raw, err := c.http.PostPayment(u, req)
+	if err != nil {
+		return nil, err
+	}
+	var result UnifiedTransferResult
+	if err := client.ParsePaymentResponse(raw.Body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
