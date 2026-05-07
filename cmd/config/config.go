@@ -65,6 +65,8 @@ func newGetCmd() *cobra.Command {
 				{Key: "Config file", Value: clifconfig.ConfigPath()},
 				{Key: "Base URL", Value: p.BaseURL},
 				{Key: "WebSocket URL", Value: p.WebSocketURL},
+				{Key: "WS Market", Value: p.WSMarket},
+				{Key: "WS Private", Value: p.WSPrivate},
 				{Key: "gRPC Spot", Value: p.GrpcSpot},
 				{Key: "gRPC Contract", Value: p.GrpcContract},
 				{Key: "Public path", Value: p.PublicPath},
@@ -92,16 +94,16 @@ func newGetCmd() *cobra.Command {
 
 func newSetCmd() *cobra.Command {
 	var (
-		profile     string
-		baseURL     string
-		wsURL       string
-		grpcSpot    string
+		profile      string
+		baseURL      string
+		wsURL        string
+		grpcSpot     string
 		grpcContract string
-		publicPath  string
-		privatePath string
-		wsMarket    string
-		wsPrivate   string
-		httpTimeout string
+		publicPath   string
+		privatePath  string
+		wsMarket     string
+		wsPrivate    string
+		httpTimeout  string
 
 		// Auth
 		authCookie        string
@@ -117,8 +119,8 @@ func newSetCmd() *cobra.Command {
 		terminalType      string
 
 		// Forex
-		forexHTTP    string
-		forexGrpc    string
+		forexHTTP string
+		forexGrpc string
 
 		// Pushgw
 		pushgwWS     string
