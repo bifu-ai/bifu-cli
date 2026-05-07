@@ -207,7 +207,7 @@ func (c *Client) ListOrderHistory(symbolID string, limit int) ([]Order, error) {
 			params["instrumentId"] = strconv.Itoa(id)
 		}
 	}
-	u := c.profile.GetPrivateURL("/spot/order/getOrderPage")
+	u := c.profile.GetPrivateURL("/spot/order/getHistoryOrderPage")
 	raw, err := c.http.GetSpot(u, params)
 	if err != nil {
 		return nil, err
