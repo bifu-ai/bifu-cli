@@ -63,7 +63,8 @@ func newWSConfigCmd(load LoadFn) *cobra.Command {
 			pr.Header("WebSocket Endpoints")
 			pr.PrintKV([]output.KV{
 				{Key: "Market WS", Value: p.GetWSMarketURL()},
-				{Key: "Private WS", Value: p.GetWSPrivateURL()},
+				{Key: "Private WS (contract)", Value: p.GetWSPrivateURL()},
+				{Key: "Private WS (spot)", Value: p.GetWSPrivateSpotURL()},
 				{Key: "Pushgw WS", Value: p.GetPushgwWSURL()},
 			})
 			return nil
@@ -71,7 +72,7 @@ func newWSConfigCmd(load LoadFn) *cobra.Command {
 	})
 
 	// ws config set
-	var marketURL, privateURL, pushgwWS, pushgwPath, wsMarket, wsPrivate string
+	var marketURL, privateURL, pushgwWS, pushgwPath, wsMarket, wsPrivate, wsPrivateSpot string
 	setCmd := &cobra.Command{
 		Use:   "set",
 		Short: "Set WebSocket endpoints in the active profile",
@@ -100,6 +101,9 @@ func newWSConfigCmd(load LoadFn) *cobra.Command {
 			} else if cmd.Flags().Changed("ws-private") {
 				p.WSPrivate = wsPrivate
 			}
+			if cmd.Flags().Changed("ws-private-spot") {
+				p.WSPrivateSpot = wsPrivateSpot
+			}
 			if cmd.Flags().Changed("pushgw-ws") {
 				p.Pushgw.WSEndpoint = pushgwWS
 			}
@@ -117,7 +121,8 @@ func newWSConfigCmd(load LoadFn) *cobra.Command {
 	setCmd.Flags().StringVar(&marketURL, "market-url", "", "Market WebSocket base URL")
 	setCmd.Flags().StringVar(&privateURL, "private-url", "", "Private WebSocket base URL")
 	setCmd.Flags().StringVar(&wsMarket, "ws-market", "", "Market WS path")
-	setCmd.Flags().StringVar(&wsPrivate, "ws-private", "", "Private WS path")
+	setCmd.Flags().StringVar(&wsPrivate, "ws-private", "", "Private WS path (contract)")
+	setCmd.Flags().StringVar(&wsPrivateSpot, "ws-private-spot", "", "Private WS path or full URL (spot)")
 	setCmd.Flags().StringVar(&pushgwWS, "pushgw-ws", "", "Pushgw WS base URL")
 	setCmd.Flags().StringVar(&pushgwPath, "pushgw-path", "", "Pushgw WS path")
 	cmd.AddCommand(setCmd)

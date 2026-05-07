@@ -37,10 +37,11 @@ type Profile struct {
 	GrpcContract string `yaml:"grpc_contract"` // Contract gRPC addr (host:port)
 
 	// ── API path prefixes ─────────────────────────────────────────────────────
-	PublicPath  string `yaml:"public_path"`  // default: /api/v1/public
-	PrivatePath string `yaml:"private_path"` // default: /api/v1/private
-        WSMarket    string `yaml:"ws_market"`    // default: /api/v1/public/ws
-        WSPrivate   string `yaml:"ws_private"`   // default: /api/v1/private/contract/ws (or /api/v1/private/spot/ws)
+	PublicPath    string `yaml:"public_path"`     // default: /api/v1/public
+	PrivatePath   string `yaml:"private_path"`    // default: /api/v1/private
+	WSMarket      string `yaml:"ws_market"`       // default: /api/v1/public/ws
+	WSPrivate     string `yaml:"ws_private"`      // default: /api/v1/private/contract/ws
+	WSPrivateSpot string `yaml:"ws_private_spot"` // default: /api/v1/private/spot/ws
 
 	// ── Authentication ────────────────────────────────────────────────────────
 	Auth AuthProfile `yaml:"auth"`
@@ -98,12 +99,13 @@ type PushgwProfile struct {
 
 func defaultProfile(name string) *Profile {
 	return &Profile{
-		Name:         name,
-		PublicPath:   "/api/v1/public",
-		PrivatePath:  "/api/v1/private",
-		WSMarket:     "/api/v1/public/ws",
-		WSPrivate:    "/api/v1/private/contract/ws",
-		HTTPTimeout:  30 * time.Second,
+		Name:          name,
+		PublicPath:    "/api/v1/public",
+		PrivatePath:   "/api/v1/private",
+		WSMarket:      "/api/v1/public/ws",
+		WSPrivate:     "/api/v1/private/contract/ws",
+		WSPrivateSpot: "/api/v1/private/spot/ws",
+		HTTPTimeout:   30 * time.Second,
 		Auth: AuthProfile{
 			Locale:       "en",
 			TerminalType: "API",
@@ -223,7 +225,7 @@ func (p *Profile) GetWSMarketURL() string {
 	return p.WebSocketURL + p.WSMarket
 }
 
-// GetWSPrivateURL builds the full WebSocket URL for private trading events.
+// GetWSPrivateURL builds the full WebSocket URL for private contract trading events.
 // If WSPrivate is already a full URL (starts with ws:// or wss://), it is returned as-is;
 // otherwise it is appended to WebSocketURL.
 func (p *Profile) GetWSPrivateURL() string {
@@ -231,6 +233,16 @@ func (p *Profile) GetWSPrivateURL() string {
 		return p.WSPrivate
 	}
 	return p.WebSocketURL + p.WSPrivate
+}
+
+// GetWSPrivateSpotURL builds the full WebSocket URL for private spot trading events.
+// If WSPrivateSpot is already a full URL (starts with ws:// or wss://), it is returned as-is;
+// otherwise it is appended to WebSocketURL.
+func (p *Profile) GetWSPrivateSpotURL() string {
+	if strings.HasPrefix(p.WSPrivateSpot, "ws://") || strings.HasPrefix(p.WSPrivateSpot, "wss://") {
+		return p.WSPrivateSpot
+	}
+	return p.WebSocketURL + p.WSPrivateSpot
 }
 
 // GetPushgwWSURL returns the pushgw WebSocket URL.

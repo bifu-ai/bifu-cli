@@ -54,8 +54,7 @@ func NewWSPrivateClient(profile *clifconfig.Profile) *WSClient {
 
 // NewWSPrivateSpotClient creates a client for the private spot trading WebSocket.
 func NewWSPrivateSpotClient(profile *clifconfig.Profile) *WSClient {
-	wsURL := profile.WebSocketURL + "/api/v1/private/spot/ws"
-	c := NewWSClient(profile, wsURL)
+	c := NewWSClient(profile, profile.GetWSPrivateSpotURL())
 	c.cookie = profile.Auth.AuthCookie
 	return c
 }

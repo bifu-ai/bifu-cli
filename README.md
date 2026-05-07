@@ -75,11 +75,11 @@ bifu-cli config init --profile myprod --env prod
 
 **环境预设地址**
 
-| 环境 | Base URL | Market WS | Private WS |
-|------|----------|-----------|------------|
-| `dev` | `https://fxapi.bifu.dev` | `wss://quote.bifu.dev` | `wss://contract.bifu.dev` |
-| `staging` | `https://fxapi.staging.bifu.co` | `wss://quote.staging.bifu.co` | `wss://contract.staging.bifu.co` |
-| `prod` | `https://fxapi.bifu.co` | `wss://quote.bifu.co` | `wss://contract.bifu.live` |
+| 环境 | Base URL | Market WS | Private WS (contract) | Private WS (spot) |
+|------|----------|-----------|-----------------------|-------------------|
+| `dev` | `https://fxapi.bifu.dev` | `wss://quote.bifu.dev` | `wss://contract.bifu.dev` | `wss://spot.bifu.dev` |
+| `staging` | `https://fxapi.staging.bifu.co` | `wss://quote.staging.bifu.co` | `wss://contract.staging.bifu.co` | `wss://spot.staging.bifu.co` |
+| `prod` | `https://fxapi.bifu.co` | `wss://quote.bifu.co` | `wss://contract.bifu.live` | `wss://spot.bifu.live` |
 
 ### 修改配置
 
@@ -467,6 +467,9 @@ bifu-cli ws config set --market-url wss://quote.bifu.dev
 # 修改 Private WS（直接设置完整 URL）
 bifu-cli ws config set --private-url wss://contract.bifu.dev/api/v1/private/contract/ws
 
+# 修改 Spot Private WS
+bifu-cli ws config set --ws-private-spot wss://spot.bifu.dev/api/v1/private/spot/ws
+
 # 修改 Pushgw WS
 bifu-cli ws config set --pushgw-ws wss://fxapi.bifu.dev --pushgw-path /pushgw/ws
 ```
@@ -493,11 +496,14 @@ bifu-cli ws market --channels ticker.all --pretty
 
 ```bash
 # 合约私有流（默认）
+# 端点: wss://contract.bifu.dev/api/v1/private/contract/ws
 bifu-cli ws private
 bifu-cli ws private --pretty
 
 # 现货私有流
+# 端点: wss://spot.bifu.dev/api/v1/private/spot/ws
 bifu-cli ws private --spot
+bifu-cli ws private --spot --pretty
 ```
 
 ### Push 网关

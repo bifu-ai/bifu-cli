@@ -67,6 +67,7 @@ func newGetCmd() *cobra.Command {
 				{Key: "WebSocket URL", Value: p.WebSocketURL},
 				{Key: "WS Market", Value: p.WSMarket},
 				{Key: "WS Private", Value: p.WSPrivate},
+				{Key: "WS Private Spot", Value: p.WSPrivateSpot},
 				{Key: "gRPC Spot", Value: p.GrpcSpot},
 				{Key: "gRPC Contract", Value: p.GrpcContract},
 				{Key: "Public path", Value: p.PublicPath},
@@ -103,6 +104,7 @@ func newSetCmd() *cobra.Command {
 		privatePath  string
 		wsMarket     string
 		wsPrivate    string
+		wsPrivateSpot string
 		httpTimeout  string
 
 		// Auth
@@ -154,6 +156,7 @@ func newSetCmd() *cobra.Command {
 			setIfChanged(cmd, "private-path", func() { p.PrivatePath = privatePath })
 			setIfChanged(cmd, "ws-market", func() { p.WSMarket = wsMarket })
 			setIfChanged(cmd, "ws-private", func() { p.WSPrivate = wsPrivate })
+			setIfChanged(cmd, "ws-private-spot", func() { p.WSPrivateSpot = wsPrivateSpot })
 			setIfChanged(cmd, "http-timeout", func() {
 				if d, err := time.ParseDuration(httpTimeout); err == nil {
 					p.HTTPTimeout = d
@@ -194,6 +197,7 @@ func newSetCmd() *cobra.Command {
 	cmd.Flags().StringVar(&privatePath, "private-path", "", "Private API path prefix")
 	cmd.Flags().StringVar(&wsMarket, "ws-market", "", "Market WebSocket path")
 	cmd.Flags().StringVar(&wsPrivate, "ws-private", "", "Private WebSocket path")
+	cmd.Flags().StringVar(&wsPrivateSpot, "ws-private-spot", "", "Spot private WebSocket full URL or path")
 	cmd.Flags().StringVar(&httpTimeout, "http-timeout", "", "HTTP timeout (e.g. 30s)")
 	// Auth flags
 	cmd.Flags().StringVar(&authCookie, "auth-cookie", "", "user_auth_name cookie (from browser DevTools)")
@@ -248,6 +252,7 @@ func newInitCmd() *cobra.Command {
 				p.WebSocketURL = "wss://fxapi.staging.bifu.co"
 				p.WSMarket = "wss://quote.staging.bifu.co/api/v1/public/ws"
 				p.WSPrivate = "wss://contract.staging.bifu.co/api/v1/private/contract/ws"
+				p.WSPrivateSpot = "wss://spot.staging.bifu.co/api/v1/private/spot/ws"
 				p.Pushgw.WSEndpoint = "wss://fxapi.staging.bifu.co"
 				p.Pushgw.WSPath = "/pushgw/ws"
 			case "prod":
@@ -255,6 +260,7 @@ func newInitCmd() *cobra.Command {
 				p.WebSocketURL = "wss://fxapi.bifu.co"
 				p.WSMarket = "wss://quote.bifu.co/api/v1/public/ws"
 				p.WSPrivate = "wss://contract.bifu.live/api/v1/private/contract/ws"
+				p.WSPrivateSpot = "wss://spot.bifu.live/api/v1/private/spot/ws"
 				p.Pushgw.WSEndpoint = "wss://fxapi.bifu.co"
 				p.Pushgw.WSPath = "/pushgw/ws"
 			default: // dev (and explicit "dev")
@@ -262,6 +268,7 @@ func newInitCmd() *cobra.Command {
 				p.WebSocketURL = "wss://fxapi.bifu.dev"
 				p.WSMarket = "wss://quote.bifu.dev/api/v1/public/ws"
 				p.WSPrivate = "wss://contract.bifu.dev/api/v1/private/contract/ws"
+				p.WSPrivateSpot = "wss://spot.bifu.dev/api/v1/private/spot/ws"
 				p.Pushgw.WSEndpoint = "wss://fxapi.bifu.dev"
 				p.Pushgw.WSPath = "/pushgw/ws"
 			}
