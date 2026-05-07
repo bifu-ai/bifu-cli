@@ -67,13 +67,16 @@ func newBalanceCmd(load LoadFn) *cobra.Command {
 				})
 				return nil
 			}
-			res, err := c.GetSavingBalance(currency)
+			res, err := c.GetSavingBalance("")
 			if err != nil {
 				return err
 			}
 			pr.Header("Saving Balance")
 			var rows [][]string
 			for _, item := range res.Items {
+				if currency != "" && item.Currency != currency {
+					continue
+				}
 				rows = append(rows, []string{
 					item.Currency, item.Balance, item.AvailableBalance, item.FrozenBalance,
 				})

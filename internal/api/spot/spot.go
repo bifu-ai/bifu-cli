@@ -91,9 +91,9 @@ type AccountAsset struct {
 type TransferReq struct {
 	CoinID       int    `json:"coinId"`
 	Amount       string `json:"amount"`
-	FromAccount  int    `json:"fromAccount"`
-	ToAccount    int    `json:"toAccount"`
-	TransferType int    `json:"transferType"`
+	FromAccount  string `json:"fromAccount"`
+	ToAccount    string `json:"toAccount"`
+	TransferType string `json:"transferType"`
 }
 
 type TransferResp struct {
