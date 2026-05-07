@@ -329,23 +329,53 @@ bifu-cli payment balance --currency USD
 bifu-cli payment balance --total --currency USDT
 ```
 
-### 划转
+### 查看外汇账户列表
 
 ```bash
-# 从储蓄账户转入外汇账户
-bifu-cli payment transfer \
-  --direction to-forex \
-  --login-id 90390034 \
-  --amount 1000 \
-  --currency USD
-
-# 从外汇账户转回储蓄账户
-bifu-cli payment transfer \
-  --direction to-saving \
-  --login-id 90390034 \
-  --amount 500 \
-  --currency USD
+bifu-cli payment forex-accounts
 ```
+
+### 统一划转
+
+`payment unified-transfer` 支持任意两种账户类型之间的资金划转，通过 `POST /payment/v2/transfer` 实现。
+
+| 账户类型 | 说明 | 所需参数 |
+|---------|------|---------|
+| `SAVING` | 法币储蓄/钱包账户 | `--currency` |
+| `FOREX` | MT5 外汇账户 | `--currency` |
+| `FUNDING` | 加密资金账户 | `--coin-id` |
+| `SPOT` | 加密现货账户 | `--coin-id` |
+| `CONTRACT` | 加密合约账户 | `--coin-id` |
+| `EARN` | 理财账户 | `--coin-id` 或 `--currency` |
+
+```bash
+# 储蓄 → 外汇（出金到 MT5）
+bifu-cli payment unified-transfer --from SAVING --to FOREX --amount 1000 --currency USD
+
+# 外汇 → 储蓄（从 MT5 提款）
+bifu-cli payment unified-transfer --from FOREX --to SAVING --amount 500 --currency USD
+
+# 储蓄 → 现货
+bifu-cli payment unified-transfer --from SAVING --to SPOT --amount 100 --currency USD
+
+# 资金账户 → 现货
+bifu-cli payment unified-transfer --from FUNDING --to SPOT --amount 10 --coin-id 1
+
+# 现货 → 合约
+bifu-cli payment unified-transfer --from SPOT --to CONTRACT --amount 10 --coin-id 1
+
+# 合约 → 资金账户
+bifu-cli payment unified-transfer --from CONTRACT --to FUNDING --amount 10 --coin-id 1
+```
+
+| Flag | 说明 | 示例 |
+|------|------|------|
+| `--from` | 转出账户类型（必填） | `SAVING` |
+| `--to` | 转入账户类型（必填） | `FOREX` |
+| `--amount` | 划转金额（必填） | `100` |
+| `--currency` | 法币代码（法币类账户必填） | `USD` |
+| `--coin-id` | 加密币 ID（加密类账户必填，1=USDT） | `1` |
+| `--comment` | 备注（可选） | `recharge` |
 
 ---
 
