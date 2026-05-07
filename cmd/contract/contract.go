@@ -4,6 +4,7 @@ package contract
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -63,9 +64,24 @@ func newOrderCreate(load LoadFn) *cobra.Command {
 		Example: `  bifu-cli contract order create --contract BTCUSDT --side LONG --order-side BUY --size 0.01
   bifu-cli contract order create --contract BTCUSDT --side SHORT --order-side SELL --type LIMIT --price 60000 --size 0.01`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			c, pr, err := newClient(load)
+			p, pr, err := load()
 			if err != nil {
 				return err
+			}
+			c := contractapi.New(p)
+			c.SetVerbose(pr.Verbose)
+			if clientID == "" {
+				uid := p.Auth.UserID
+				if uid == "" {
+					uid = "anon"
+				}
+				ts := time.Now().UTC().Format("20060102150405")
+				ctr := strings.ToLower(contractID)
+				side := strings.ToLower(orderSide)
+				clientID = fmt.Sprintf("%s-%s-%s-%s", uid, ctr, side, ts)
+				if len(clientID) > 64 {
+					clientID = clientID[:64]
+				}
 			}
 			resp, err := c.CreateOrder(&contractapi.CreateOrderReq{
 				ContractID:       strings.ToUpper(contractID),

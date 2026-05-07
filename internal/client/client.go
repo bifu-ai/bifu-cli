@@ -294,6 +294,12 @@ func (c *HTTPClient) do(method, rawURL string, params map[string]string, body in
 		}
 		return nil, fmt.Errorf("access denied (HTTP 403): %s", msg)
 	}
+	if resp.StatusCode == 404 {
+		return nil, fmt.Errorf("endpoint not found (HTTP 404): %s", rawURL)
+	}
+	if resp.StatusCode >= 400 {
+		return nil, fmt.Errorf("HTTP error %d: %s", resp.StatusCode, strings.TrimSpace(string(data)))
+	}
 
 	return &HTTPResponse{
 		StatusCode: resp.StatusCode,

@@ -130,15 +130,15 @@ anything else defaults to "dev").`,
 
 			val := cookie.Generate(uid, env)
 
-			// Update auth_cookie in profile and save
-			p := cfg.Active()
+			// Update auth_cookie in the target profile (respects --profile flag)
+			p := cfg.EnsureProfile(profile.Name)
 			p.Auth.AuthCookie = val
 			p.Auth.UserID = strconv.FormatInt(uid, 10)
 			if err := cfg.Save(); err != nil {
 				return fmt.Errorf("save config: %w", err)
 			}
 
-			fmt.Printf("✓ Cookie saved to profile %q\n", cfg.ActiveProfile)
+			fmt.Printf("✓ Cookie saved to profile %q\n", profile.Name)
 			fmt.Printf("  uid : %d\n", uid)
 			fmt.Printf("  env : %s\n", env)
 			fmt.Printf("  cookie: %s\n", val)
