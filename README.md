@@ -75,11 +75,11 @@ bifu-cli config init --profile myprod --env prod
 
 **环境预设地址**
 
-| 环境 | Base URL | WebSocket |
-|------|----------|-----------|
-| `dev` | `https://fxapi.bifu.dev` | `wss://fxapi.bifu.dev` |
-| `staging` | `https://fxapi.staging.bifu.dev` | `wss://fxapi.staging.bifu.dev` |
-| `prod` | `https://fxapi.bifu.dev` | `wss://fxapi.bifu.dev` |
+| 环境 | Base URL | Market WS | Private WS |
+|------|----------|-----------|------------|
+| `dev` | `https://fxapi.bifu.dev` | `wss://quote.bifu.dev` | `wss://contract.bifu.dev` |
+| `staging` | `https://fxapi.staging.bifu.co` | `wss://quote.staging.bifu.co` | `wss://contract.staging.bifu.co` |
+| `prod` | `https://fxapi.bifu.co` | `wss://quote.bifu.co` | `wss://contract.bifu.live` |
 
 ### 修改配置
 
@@ -93,8 +93,8 @@ bifu-cli config set --contract-key ACCESS_KEY --contract-secret SECRET_KEY
 # 设置 Cookie 认证（支付/外汇接口）
 bifu-cli config set --auth-cookie "user_auth_name=eyJhbGc..."
 
-# 设置外汇 MT5 接口地址
-bifu-cli config set --forex-http https://mt.api.com --forex-ws wss://mt.api.com --forex-ws-path /mt5/Events
+# 设置外汇 HTTP 地址（可选）
+bifu-cli config set --forex-http https://fxapi.bifu.dev
 
 # 修改 Base URL
 bifu-cli config set --base-url https://fxapi.bifu.dev
@@ -148,9 +148,9 @@ bifu-cli --profile dev auth login --username user@example.com --password 'MyPass
 
 > **注意**：Dev 环境验证码固定为 `123456`。
 
-### auth cookie — 本地 Cookie 工具
+### auth cookie — Cookie 工具
 
-> 仅适用于本地 K8s 环境（`custom`），Dev/Staging/Prod 需使用 `auth login`。
+> 适用于已知 Cookie 加密 key 的环境（dev / custom）。生产环境推荐使用 `auth login`。
 
 #### 生成并保存 Cookie（custom 环境）
 
@@ -260,11 +260,7 @@ bifu-cli contract account
 ### 查看持仓
 
 ```bash
-# 所有持仓
 bifu-cli contract position list
-
-# 指定合约
-bifu-cli contract position list --contract-id BTC-USDT-SWAP
 ```
 
 ### 下单
@@ -305,8 +301,8 @@ bifu-cli contract order list --contract-id BTC-USDT-SWAP
 # 撤销指定订单
 bifu-cli contract order cancel --order-id 123456789
 
-# 撤销合约所有挂单
-bifu-cli contract order cancel --all --contract-id BTC-USDT-SWAP
+# 撤销指定合约的所有挂单
+bifu-cli contract order cancel --all --contract BTC-USDT-SWAP
 
 # 修改价格
 bifu-cli contract order modify --order-id 123456789 --price 96000
@@ -336,18 +332,26 @@ bifu-cli payment balance --total --currency USDT
 ### 划转
 
 ```bash
+# 从储蓄账户转入外汇账户
 bifu-cli payment transfer \
-  --from spot \
-  --to contract \
-  --currency USDT \
-  --amount 100
+  --direction to-forex \
+  --login-id 90390034 \
+  --amount 1000 \
+  --currency USD
+
+# 从外汇账户转回储蓄账户
+bifu-cli payment transfer \
+  --direction to-saving \
+  --login-id 90390034 \
+  --amount 500 \
+  --currency USD
 ```
 
 ---
 
 ## forex — 外汇(MT5)交易
 
-> 外汇接口通过 Cookie 认证，需先执行 `bifu-cli auth cookie set <uid>` 生成并保存 Cookie。
+> 外汇接口通过 Cookie 认证，需先执行 `bifu-cli auth login` 登录或手动设置 Cookie。
 
 ### 订单类型
 
@@ -454,42 +458,43 @@ bifu-cli forex order history \
 # 查看当前 WS 配置
 bifu-cli ws config show
 
-# 修改地址
-bifu-cli ws config set \
-  --market-url wss://fxapi.bifu.dev \
-  --private-url wss://fxapi.bifu.dev
+# 修改 Market WS 地址
+bifu-cli ws config set --market-url wss://quote.bifu.dev
 
-# 配置外汇 WS
-bifu-cli ws config set \
-  --forex-ws wss://mt.api.com \
-  --forex-path /mt5/Events
+# 修改 Market WS 路径
+bifu-cli ws config set --ws-market /api/v1/public/ws
+
+# 修改 Pushgw WS
+bifu-cli ws config set --pushgw-ws wss://fxapi.bifu.dev --pushgw-path /pushgw/ws
 ```
 
 ### 订阅市场行情
 
+Channel 格式使用 contractId（数字 ID），不是 symbol 名称。
+
 ```bash
-# 单个 channel
-bifu-cli ws market --channels ticker.BTCUSDT
+# 订阅所有合约 ticker
+bifu-cli ws market --channels ticker.all
+
+# 订阅单个合约（10000001 = BTC-USDT-SWAP）
+bifu-cli ws market --channels ticker.10000001
 
 # 多个 channels
-bifu-cli ws market --channels ticker.BTCUSDT,depth.ETHUSDT,trade.BTCUSDT
+bifu-cli ws market --channels ticker.10000001,depth.10000001.15
 
 # 美化 JSON 输出
-bifu-cli ws market --channels ticker.BTCUSDT --pretty
+bifu-cli ws market --channels ticker.all --pretty
 ```
 
 ### 订阅私有事件（订单/持仓推送）
 
 ```bash
+# 合约私有流（默认）
 bifu-cli ws private
-bifu-cli ws private --channels order,position --pretty
-```
+bifu-cli ws private --pretty
 
-### 外汇实时事件
-
-```bash
-bifu-cli ws forex
-bifu-cli ws forex --login-id 90390034 --pretty
+# 现货私有流
+bifu-cli ws private --spot
 ```
 
 ### Push 网关
