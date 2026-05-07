@@ -83,7 +83,12 @@ func newWSConfigCmd(load LoadFn) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			p := cfg.Active()
+			// Respect global --profile flag
+			profileName := cfg.ActiveProfile
+			if g, _ := cmd.Root().PersistentFlags().GetString("profile"); g != "" {
+				profileName = g
+			}
+			p := cfg.EnsureProfile(profileName)
 			if cmd.Flags().Changed("market-url") && cmd.Flags().Changed("ws-market") {
 				// Both provided: combine into full URL stored in WSMarket
 				p.WSMarket = marketURL + wsMarket
