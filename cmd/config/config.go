@@ -250,6 +250,8 @@ func newInitCmd() *cobra.Command {
 			default: // dev (and explicit "dev")
 				p.BaseURL = "https://fxapi.bifu.dev"
 				p.WebSocketURL = "wss://fxapi.bifu.dev"
+				p.WSMarket = "wss://quote.bifu.dev/api/v1/public/ws"
+				p.WSPrivate = "wss://contract.bifu.dev/api/v1/private/contract/ws"
 				p.Pushgw.WSEndpoint = "wss://fxapi.bifu.dev"
 				p.Pushgw.WSPath = "/pushgw/ws"
 			}
