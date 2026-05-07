@@ -76,20 +76,28 @@ On success, the session cookie is automatically saved to the active profile.`,
 			if err != nil {
 				return fmt.Errorf("login failed: %w", err)
 			}
-			fmt.Println("✓ Password accepted, verification code sent to email")
 
-			// ── Step 2: prompt for verification code ──────────────────────────
-			fmt.Print("Verification code: ")
-			codeLine, _ := reader.ReadString('\n')
-			code := strings.TrimSpace(codeLine)
-			if code == "" {
-				return fmt.Errorf("verification code is required")
-			}
+			var cookieVal, userID string
 
-			// ── Step 3: POST /user/login_check ────────────────────────────────
-			cookieVal, userID, err := doLoginCheck(baseURL, issueID, code)
-			if err != nil {
-				return fmt.Errorf("verification failed: %w", err)
+			// If issueID has COOKIE: prefix, no 2FA needed — cookie is inline
+			if strings.HasPrefix(issueID, "COOKIE:") {
+				cookieVal = strings.TrimPrefix(issueID, "COOKIE:")
+			} else {
+				fmt.Println("✓ Password accepted, verification code sent to email")
+
+				// ── Step 2: prompt for verification code ──────────────────────────
+				fmt.Print("Verification code: ")
+				codeLine, _ := reader.ReadString('\n')
+				code := strings.TrimSpace(codeLine)
+				if code == "" {
+					return fmt.Errorf("verification code is required")
+				}
+
+				// ── Step 3: POST /user/login_check ────────────────────────────────
+				cookieVal, userID, err = doLoginCheck(baseURL, issueID, code)
+				if err != nil {
+					return fmt.Errorf("verification failed: %w", err)
+				}
 			}
 
 			// ── Step 4: persist cookie to active profile ──────────────────────
@@ -131,7 +139,13 @@ type loginResp struct {
 	RetCode string `json:"retCode"`
 	RetMsg  string `json:"retMsg"`
 	Result  struct {
-		IssueID string `json:"issueId"`
+		CookieStr string `json:"cookieStr"`
+		User      struct {
+			UserID string `json:"userId"`
+		} `json:"user"`
+		DoubleCheck struct {
+			IssueID string `json:"issueId"`
+		} `json:"doubleCheck"`
 	} `json:"result"`
 }
 
@@ -142,6 +156,9 @@ func doLogin(baseURL, username, password string) (issueID string, err error) {
 		return "", err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("terminalType", "web")
+	req.Header.Set("locale", "en")
+	req.Header.Set("appVersion", "1.0.0")
 
 	c := &http.Client{Timeout: 30 * time.Second}
 	resp, err := c.Do(req)
@@ -157,44 +174,46 @@ func doLogin(baseURL, username, password string) (issueID string, err error) {
 	if out.RetCode != "0" {
 		return "", fmt.Errorf("[%s] %s", out.RetCode, out.RetMsg)
 	}
-	if out.Result.IssueID == "" {
-		msg := out.RetMsg
-		if msg == "" || msg == "success" {
-			msg = "email sending may have failed"
-		}
-		return "", fmt.Errorf("no issueId returned: %s", msg)
+	// Direct cookie (no 2FA required)
+	if out.Result.CookieStr != "" {
+		return "COOKIE:" + out.Result.CookieStr, nil
 	}
-	return out.Result.IssueID, nil
+	if out.Result.DoubleCheck.IssueID == "" {
+		return "", fmt.Errorf("no issueId returned — check credentials")
+	}
+	return out.Result.DoubleCheck.IssueID, nil
 }
 
 type loginCheckReq struct {
-	IssueID     string `json:"issueId"`
-	CheckMethod string `json:"checkMethod"`
-	Code        string `json:"code"`
+	IssueID string `json:"issueId"`
+	Code    string `json:"code"`
 }
 
 type loginCheckResp struct {
 	RetCode string `json:"retCode"`
 	RetMsg  string `json:"retMsg"`
 	Result  struct {
-		User struct {
-			UserID string `json:"userId"`
-			Email  string `json:"email"`
+		CookieStr string `json:"cookieStr"`
+		User      struct {
+			UID   int64  `json:"userId"`
+			Email string `json:"email"`
 		} `json:"user"`
 	} `json:"result"`
 }
 
 func doLoginCheck(baseURL, issueID, code string) (cookieVal, userID string, err error) {
 	body, _ := json.Marshal(loginCheckReq{
-		IssueID:     issueID,
-		CheckMethod: "email",
-		Code:        code,
+		IssueID: issueID,
+		Code:    code,
 	})
 	req, err := http.NewRequest("POST", baseURL+"/user/login_check", bytes.NewReader(body))
 	if err != nil {
 		return "", "", err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("terminalType", "web")
+	req.Header.Set("locale", "en")
+	req.Header.Set("appVersion", "1.0.0")
 
 	c := &http.Client{Timeout: 30 * time.Second}
 	resp, err := c.Do(req)
@@ -211,11 +230,15 @@ func doLoginCheck(baseURL, issueID, code string) (cookieVal, userID string, err 
 		return "", "", fmt.Errorf("[%s] %s", out.RetCode, out.RetMsg)
 	}
 
-	// Extract user_auth_name from Set-Cookie
+	// Cookie is in response body cookieStr field
+	if out.Result.CookieStr != "" {
+		return out.Result.CookieStr, fmt.Sprintf("%d", out.Result.User.UID), nil
+	}
+	// Fallback: check Set-Cookie header
 	for _, ck := range resp.Cookies() {
 		if ck.Name == "user_auth_name" {
-			return ck.Value, out.Result.User.UserID, nil
+			return ck.Value, fmt.Sprintf("%d", out.Result.User.UID), nil
 		}
 	}
-	return "", out.Result.User.UserID, fmt.Errorf("user_auth_name cookie not found in response")
+	return "", fmt.Sprintf("%d", out.Result.User.UID), fmt.Errorf("no cookie returned in response")
 }
