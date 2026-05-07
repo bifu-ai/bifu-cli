@@ -38,8 +38,8 @@ type Profile struct {
 	// ── API path prefixes ─────────────────────────────────────────────────────
 	PublicPath  string `yaml:"public_path"`  // default: /api/v1/public
 	PrivatePath string `yaml:"private_path"` // default: /api/v1/private
-	WSMarket    string `yaml:"ws_market"`    // default: /api/v1/public/market/ws
-	WSPrivate   string `yaml:"ws_private"`   // default: /api/v1/private/ws
+        WSMarket    string `yaml:"ws_market"`    // default: /api/v1/public/ws
+        WSPrivate   string `yaml:"ws_private"`   // default: /api/v1/private/contract/ws (or /api/v1/private/spot/ws)
 
 	// ── Authentication ────────────────────────────────────────────────────────
 	Auth AuthProfile `yaml:"auth"`
@@ -84,8 +84,6 @@ type AuthProfile struct {
 // ForexProfile holds MT5 connection settings.
 type ForexProfile struct {
 	HTTPEndpoint    string `yaml:"http_endpoint"`
-	WSEndpoint      string `yaml:"ws_endpoint"`
-	WSPath          string `yaml:"ws_path"` // e.g. /mt5/Events
 	ManagerGrpcAddr string `yaml:"manager_grpc_addr"`
 }
 
@@ -102,8 +100,8 @@ func defaultProfile(name string) *Profile {
 		Name:         name,
 		PublicPath:   "/api/v1/public",
 		PrivatePath:  "/api/v1/private",
-		WSMarket:     "/api/v1/public/market/ws",
-		WSPrivate:    "/api/v1/private/ws",
+		WSMarket:     "/api/v1/public/ws",
+		WSPrivate:    "/api/v1/private/contract/ws",
 		HTTPTimeout:  30 * time.Second,
 		Auth: AuthProfile{
 			Locale:       "en",
@@ -222,15 +220,6 @@ func (p *Profile) GetWSMarketURL() string {
 // GetWSPrivateURL builds the full WebSocket URL for private trading events.
 func (p *Profile) GetWSPrivateURL() string {
 	return p.WebSocketURL + p.WSPrivate
-}
-
-// GetForexWSURL returns the full MT5 WebSocket URL (optionally with session token).
-func (p *Profile) GetForexWSURL(token string) string {
-	u := p.Forex.WSEndpoint + p.Forex.WSPath
-	if token != "" {
-		u += "?id=" + token
-	}
-	return u
 }
 
 // GetPushgwWSURL returns the pushgw WebSocket URL.

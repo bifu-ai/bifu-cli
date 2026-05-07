@@ -45,16 +45,19 @@ func NewWSMarketClient(profile *clifconfig.Profile) *WSClient {
 	return NewWSClient(profile, profile.GetWSMarketURL())
 }
 
-// NewWSPrivateClient creates a client for the private trading WebSocket.
+// NewWSPrivateClient creates a client for the private contract trading WebSocket.
 func NewWSPrivateClient(profile *clifconfig.Profile) *WSClient {
 	c := NewWSClient(profile, profile.GetWSPrivateURL())
 	c.cookie = profile.Auth.AuthCookie
 	return c
 }
 
-// NewForexWSClient creates a client for MT5 events WebSocket.
-func NewForexWSClient(profile *clifconfig.Profile, sessionToken string) *WSClient {
-	return NewWSClient(profile, profile.GetForexWSURL(sessionToken))
+// NewWSPrivateSpotClient creates a client for the private spot trading WebSocket.
+func NewWSPrivateSpotClient(profile *clifconfig.Profile) *WSClient {
+	wsURL := profile.WebSocketURL + "/api/v1/private/spot/ws"
+	c := NewWSClient(profile, wsURL)
+	c.cookie = profile.Auth.AuthCookie
+	return c
 }
 
 // NewPushgwWSClient creates a client for the real-time forex quote WebSocket.
@@ -90,22 +93,33 @@ func (c *WSClient) Connect() error {
 	return nil
 }
 
-// Subscribe sends a subscription message.
+// Subscribe sends subscription messages for the given channels.
+// Market WS expects one message per channel: {"event":"subscribe","channel":"..."}
 func (c *WSClient) Subscribe(channels ...string) error {
-	msg := map[string]interface{}{
-		"op":   "subscribe",
-		"args": channels,
+	for _, ch := range channels {
+		msg := map[string]string{
+			"event":   "subscribe",
+			"channel": ch,
+		}
+		if err := c.WriteJSON(msg); err != nil {
+			return err
+		}
 	}
-	return c.WriteJSON(msg)
+	return nil
 }
 
-// Unsubscribe sends an unsubscribe message.
+// Unsubscribe sends unsubscribe messages for the given channels.
 func (c *WSClient) Unsubscribe(channels ...string) error {
-	msg := map[string]interface{}{
-		"op":   "unsubscribe",
-		"args": channels,
+	for _, ch := range channels {
+		msg := map[string]string{
+			"event":   "unsubscribe",
+			"channel": ch,
+		}
+		if err := c.WriteJSON(msg); err != nil {
+			return err
+		}
 	}
-	return c.WriteJSON(msg)
+	return nil
 }
 
 // WriteJSON sends a JSON-encoded message.

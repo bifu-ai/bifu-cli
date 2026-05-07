@@ -53,9 +53,9 @@ func newOrderCreate(load LoadFn) *cobra.Command {
 	var (
 		contractID, positionSide, orderSide, typ string
 		price, size, tif, clientID               string
-		marginMode, separatedMode                 string
-		reduceOnly                                bool
-		triggerPrice, triggerPriceType            string
+		marginMode, separatedMode                string
+		reduceOnly                               bool
+		triggerPrice, triggerPriceType           string
 	)
 	cmd := &cobra.Command{
 		Use:   "create",
@@ -303,12 +303,27 @@ func newAccountCmd(load LoadFn) *cobra.Command {
 				return err
 			}
 			pr.PrintKV([]output.KV{
-				{Key: "Account ID", Value: fmt.Sprintf("%v", info.AccountID)},
-				{Key: "Total Balance", Value: info.TotalBalance},
-				{Key: "Available Balance", Value: info.AvailBalance},
-				{Key: "Position Value", Value: info.PositionValue},
-				{Key: "Unrealized PnL", Value: info.UnrealizedPnl},
+				{Key: "Account ID", Value: info.AccountID},
+				{Key: "User ID", Value: info.UserID},
+				{Key: "Status", Value: info.Status},
 			})
+			if len(info.Assets) > 0 {
+				fmt.Fprintln(cmd.OutOrStdout(), "\nAssets:")
+				rows := make([][]string, 0, len(info.Assets))
+				for _, a := range info.Assets {
+					if a.AccountEquity == "0" && a.AccountAvailable == "0" {
+						continue
+					}
+					rows = append(rows, []string{
+						a.CoinID, a.AccountEquity, a.AccountAvailable, a.AccountUsed, a.UnrealizePnl,
+					})
+				}
+				if len(rows) > 0 {
+					pr.PrintTable([]string{"COIN", "EQUITY", "AVAILABLE", "USED", "UNREALIZED PNL"}, rows)
+				} else {
+					fmt.Fprintln(cmd.OutOrStdout(), "  No funded assets.")
+				}
+			}
 			return nil
 		},
 	}

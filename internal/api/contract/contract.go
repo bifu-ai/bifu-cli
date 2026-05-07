@@ -79,13 +79,23 @@ type Position struct {
 	LiqPrice     string      `json:"liquidationPrice"`
 }
 
+type accountAsset struct {
+	AccountID                    string `json:"accountId"`
+	CoinID                       string `json:"coinId"`
+	AccountEquity                string `json:"accountEquity"`
+	AccountAvailable             string `json:"accountAvailable"`
+	AccountUsed                  string `json:"accountUsed"`
+	AccountFrozen                string `json:"accountFrozen"`
+	UnrealizePnl                 string `json:"unrealizePnl"`
+	InitialMarginRequirement     string `json:"initialMarginRequirement"`
+	MaintenanceMarginRequirement string `json:"maintenanceMarginRequirement"`
+}
+
 type AccountInfo struct {
-	AccountID     interface{} `json:"accountId"`
-	AccountType   int         `json:"accountType"`
-	TotalBalance  string      `json:"totalBalance"`
-	AvailBalance  string      `json:"availableBalance"`
-	PositionValue string      `json:"positionValue"`
-	UnrealizedPnl string      `json:"unrealizedPnl"`
+	AccountID string         `json:"id"`
+	UserID    string         `json:"userId"`
+	Status    string         `json:"status"`
+	Assets    []accountAsset // aggregated from getAccountAsset
 }
 
 type ModifyOrderReq struct {
@@ -201,18 +211,22 @@ func (c *Client) ListPositions(contractID string) ([]Position, error) {
 	return parsePageDataPositions(raw.Body)
 }
 
-// GetAccount returns the contract account summary.
+// GetAccount returns the contract account summary using getAccountAsset endpoint.
 func (c *Client) GetAccount() (*AccountInfo, error) {
-	u := c.profile.GetPrivateURL("/contract/account/getAccount")
+	u := c.profile.GetPrivateURL("/contract/account/getAccountAsset")
 	raw, err := c.http.GetContract(u, nil)
 	if err != nil {
 		return nil, err
 	}
-	var info AccountInfo
-	if err := client.ParseAPIResponse(raw.Body, &info); err != nil {
+	var outer struct {
+		Account AccountInfo    `json:"account"`
+		Assets  []accountAsset `json:"accountAssetList"`
+	}
+	if err := client.ParseAPIResponse(raw.Body, &outer); err != nil {
 		return nil, err
 	}
-	return &info, nil
+	outer.Account.Assets = outer.Assets
+	return &outer.Account, nil
 }
 
 // ModifyOrder modifies an existing contract order (price/size) by order ID.

@@ -77,7 +77,6 @@ func newGetCmd() *cobra.Command {
 				{Key: "User ID", Value: p.Auth.UserID},
 				{Key: "Cookie auth", Value: maskKey(p.Auth.AuthCookie)},
 				{Key: "Forex HTTP", Value: p.Forex.HTTPEndpoint},
-				{Key: "Forex WS", Value: p.Forex.WSEndpoint + p.Forex.WSPath},
 				{Key: "Pushgw WS", Value: p.Pushgw.WSEndpoint + p.Pushgw.WSPath},
 				{Key: "Locale", Value: p.Auth.Locale},
 				{Key: "Terminal type", Value: p.Auth.TerminalType},
@@ -119,8 +118,6 @@ func newSetCmd() *cobra.Command {
 
 		// Forex
 		forexHTTP    string
-		forexWS      string
-		forexWSPath  string
 		forexGrpc    string
 
 		// Pushgw
@@ -134,7 +131,7 @@ func newSetCmd() *cobra.Command {
 		Example: `  bifu-cli config set --base-url https://api.bifu.dev
   bifu-cli config set --profile dev --base-url https://api.bifu.dev --spot-key KEY --spot-secret SECRET
   bifu-cli config set --auth-cookie <cookie-value>
-  bifu-cli config set --forex-http https://api.dev.mtapi.org --forex-ws wss://api.dev.mtapi.org`,
+  bifu-cli config set --forex-http https://api.bifu.dev`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := clifconfig.Load()
 			if err != nil {
@@ -172,8 +169,6 @@ func newSetCmd() *cobra.Command {
 			setIfChanged(cmd, "locale", func() { p.Auth.Locale = locale })
 			setIfChanged(cmd, "terminal-type", func() { p.Auth.TerminalType = terminalType })
 			setIfChanged(cmd, "forex-http", func() { p.Forex.HTTPEndpoint = forexHTTP })
-			setIfChanged(cmd, "forex-ws", func() { p.Forex.WSEndpoint = forexWS })
-			setIfChanged(cmd, "forex-ws-path", func() { p.Forex.WSPath = forexWSPath })
 			setIfChanged(cmd, "forex-grpc", func() { p.Forex.ManagerGrpcAddr = forexGrpc })
 			setIfChanged(cmd, "pushgw-ws", func() { p.Pushgw.WSEndpoint = pushgwWS })
 			setIfChanged(cmd, "pushgw-ws-path", func() { p.Pushgw.WSPath = pushgwWSPath })
@@ -212,8 +207,6 @@ func newSetCmd() *cobra.Command {
 	cmd.Flags().StringVar(&terminalType, "terminal-type", "", "Terminal type header (e.g. API, WEB)")
 	// Forex flags
 	cmd.Flags().StringVar(&forexHTTP, "forex-http", "", "MT5 HTTP endpoint")
-	cmd.Flags().StringVar(&forexWS, "forex-ws", "", "MT5 WebSocket endpoint")
-	cmd.Flags().StringVar(&forexWSPath, "forex-ws-path", "", "MT5 WebSocket path (e.g. /mt5/Events)")
 	cmd.Flags().StringVar(&forexGrpc, "forex-grpc", "", "MT5 Manager gRPC address")
 	// Pushgw flags
 	cmd.Flags().StringVar(&pushgwWS, "pushgw-ws", "", "Pushgw WebSocket endpoint")
@@ -257,9 +250,6 @@ func newInitCmd() *cobra.Command {
 			default: // dev (and explicit "dev")
 				p.BaseURL = "https://fxapi.bifu.dev"
 				p.WebSocketURL = "wss://fxapi.bifu.dev"
-				p.Forex.HTTPEndpoint = "https://api.dev.mtapi.org"
-				p.Forex.WSEndpoint = "wss://api.dev.mtapi.org"
-				p.Forex.WSPath = "/mt5/Events"
 				p.Pushgw.WSEndpoint = "wss://fxapi.bifu.dev"
 				p.Pushgw.WSPath = "/pushgw/ws"
 			}

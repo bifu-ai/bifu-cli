@@ -39,7 +39,6 @@ Config subcommand manages WebSocket endpoints stored in the active profile.
 	cmd.AddCommand(newWSConfigCmd(load))
 	cmd.AddCommand(newWSMarketCmd(load))
 	cmd.AddCommand(newWSPrivateCmd(load))
-	cmd.AddCommand(newWSForexCmd(load))
 	cmd.AddCommand(newWSPushgwCmd(load))
 	return cmd
 }
@@ -65,7 +64,6 @@ func newWSConfigCmd(load LoadFn) *cobra.Command {
 			pr.PrintKV([]output.KV{
 				{Key: "Market WS", Value: p.GetWSMarketURL()},
 				{Key: "Private WS", Value: p.GetWSPrivateURL()},
-				{Key: "Forex WS", Value: p.GetForexWSURL("")},
 				{Key: "Pushgw WS", Value: p.GetPushgwWSURL()},
 			})
 			return nil
@@ -73,12 +71,12 @@ func newWSConfigCmd(load LoadFn) *cobra.Command {
 	})
 
 	// ws config set
-	var marketURL, privateURL, forexWS, forexPath, pushgwWS, pushgwPath string
+	var marketURL, privateURL, pushgwWS, pushgwPath string
 	setCmd := &cobra.Command{
 		Use:   "set",
 		Short: "Set WebSocket endpoints in the active profile",
-		Example: `  bifu-cli ws config set --market-url wss://api.bifu.dev --market-path /api/v1/public/market/ws
-  bifu-cli ws config set --forex-ws wss://mt.api.com --forex-path /mt5/Events`,
+		Example: `  bifu-cli ws config set --market-url wss://api.bifu.dev
+  bifu-cli ws config set --pushgw-ws wss://api.bifu.dev --pushgw-path /pushgw/ws`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := clifconfig.Load()
 			if err != nil {
@@ -96,12 +94,6 @@ func newWSConfigCmd(load LoadFn) *cobra.Command {
 			}
 			if cmd.Flags().Changed("ws-private") {
 				p.WSPrivate = privateURL
-			}
-			if cmd.Flags().Changed("forex-ws") {
-				p.Forex.WSEndpoint = forexWS
-			}
-			if cmd.Flags().Changed("forex-path") {
-				p.Forex.WSPath = forexPath
 			}
 			if cmd.Flags().Changed("pushgw-ws") {
 				p.Pushgw.WSEndpoint = pushgwWS
@@ -121,8 +113,6 @@ func newWSConfigCmd(load LoadFn) *cobra.Command {
 	setCmd.Flags().StringVar(&privateURL, "private-url", "", "Private WebSocket base URL")
 	setCmd.Flags().StringVar(&marketURL, "ws-market", "", "Market WS path")
 	setCmd.Flags().StringVar(&privateURL, "ws-private", "", "Private WS path")
-	setCmd.Flags().StringVar(&forexWS, "forex-ws", "", "Forex WS base URL")
-	setCmd.Flags().StringVar(&forexPath, "forex-path", "", "Forex WS path")
 	setCmd.Flags().StringVar(&pushgwWS, "pushgw-ws", "", "Pushgw WS base URL")
 	setCmd.Flags().StringVar(&pushgwPath, "pushgw-path", "", "Pushgw WS path")
 	cmd.AddCommand(setCmd)
@@ -137,8 +127,9 @@ func newWSMarketCmd(load LoadFn) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "market",
 		Short: "Subscribe to public market data stream",
-		Example: `  bifu-cli ws market --channels ticker.BTCUSDT
-  bifu-cli ws market --channels ticker.BTCUSDT,depth.ETHUSDT --pretty`,
+		Example: `  bifu-cli ws market --channels ticker.10000001
+  bifu-cli ws market --channels ticker.all
+  bifu-cli ws market --channels ticker.10000001,depth.10000001.15 --pretty`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			p, pr, err := load()
 			if err != nil {
@@ -158,10 +149,10 @@ func newWSMarketCmd(load LoadFn) *cobra.Command {
 			if err := ws.Subscribe(channels...); err != nil {
 				return err
 			}
-			return streamMessages(ws, pr, pretty)
+			return streamMarketMessages(ws, pr, pretty)
 		},
 	}
-	cmd.Flags().StringSliceVar(&channels, "channels", nil, "Channel(s) to subscribe (e.g. ticker.BTCUSDT)")
+	cmd.Flags().StringSliceVar(&channels, "channels", nil, "Channel(s) to subscribe (e.g. ticker.10000001, ticker.all, depth.10000001.15)")
 	cmd.Flags().BoolVar(&pretty, "pretty", false, "Pretty-print JSON messages")
 	_ = cmd.MarkFlagRequired("channels")
 	return cmd
@@ -170,80 +161,38 @@ func newWSMarketCmd(load LoadFn) *cobra.Command {
 // ── ws private ────────────────────────────────────────────────────────────────
 
 func newWSPrivateCmd(load LoadFn) *cobra.Command {
-	var channels []string
 	var pretty bool
+	var spot bool
 	cmd := &cobra.Command{
 		Use:   "private",
-		Short: "Subscribe to private trading events stream",
+		Short: "Subscribe to private trading events stream (contract by default)",
 		Example: `  bifu-cli ws private
-  bifu-cli ws private --channels order,position --pretty`,
+  bifu-cli ws private --spot
+  bifu-cli ws private --pretty`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			p, pr, err := load()
 			if err != nil {
 				return err
 			}
-			pr.Header("Private WebSocket: " + p.GetWSPrivateURL())
+			var ws *wsclient.WSClient
+			if spot {
+				ws = wsclient.NewWSPrivateSpotClient(p)
+			} else {
+				ws = wsclient.NewWSPrivateClient(p)
+			}
+			pr.Header("Private WebSocket: " + ws.URL())
 			pr.Line("Press Ctrl+C to stop\n")
 
-			ws := wsclient.NewWSPrivateClient(p)
 			if err := ws.Connect(); err != nil {
 				return fmt.Errorf("connect: %w", err)
 			}
 			defer ws.Close()
 
-			if len(channels) > 0 {
-				if err := ws.Subscribe(channels...); err != nil {
-					return err
-				}
-			}
-			return streamMessages(ws, pr, pretty)
+			return streamPrivateMessages(ws, pr, pretty)
 		},
 	}
-	cmd.Flags().StringSliceVar(&channels, "channels", nil, "Channel(s) to subscribe")
 	cmd.Flags().BoolVar(&pretty, "pretty", false, "Pretty-print JSON messages")
-	return cmd
-}
-
-// ── ws forex ──────────────────────────────────────────────────────────────────
-
-func newWSForexCmd(load LoadFn) *cobra.Command {
-	var loginID int64
-	var pretty bool
-	cmd := &cobra.Command{
-		Use:   "forex",
-		Short: "Subscribe to forex (MT5) real-time events",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			p, pr, err := load()
-			if err != nil {
-				return err
-			}
-			url := p.GetForexWSURL("")
-			if url == "" {
-				return fmt.Errorf("forex WebSocket URL not configured — run: bifu-cli ws config set --forex-ws wss://...")
-			}
-			pr.Header("Forex WebSocket: " + url)
-			if loginID > 0 {
-				pr.Line("Login ID: %d", loginID)
-			}
-			pr.Line("Press Ctrl+C to stop\n")
-
-			ws := wsclient.NewForexWSClient(p, "")
-			if err := ws.Connect(); err != nil {
-				return fmt.Errorf("connect: %w", err)
-			}
-			defer ws.Close()
-
-			if loginID > 0 {
-				_ = ws.WriteJSON(map[string]interface{}{
-					"action":  "subscribe",
-					"loginId": loginID,
-				})
-			}
-			return streamMessages(ws, pr, pretty)
-		},
-	}
-	cmd.Flags().Int64Var(&loginID, "login-id", 0, "MT5 login ID to subscribe to")
-	cmd.Flags().BoolVar(&pretty, "pretty", false, "Pretty-print JSON messages")
+	cmd.Flags().BoolVar(&spot, "spot", false, "Connect to spot private WS instead of contract")
 	return cmd
 }
 
@@ -380,6 +329,69 @@ func streamPushgwMessages(ws *wsclient.WSClient, pr *output.Printer, pretty bool
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
+// streamMarketMessages reads market WS messages. Sends {event:ping} every 30s to keep alive.
+// Responds to server pings: {event:"ping",time:"..."} → {event:"pong",time:"..."}
+func streamMarketMessages(ws *wsclient.WSClient, pr *output.Printer, pretty bool) error {
+	sig := make(chan os.Signal, 1)
+	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
+
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-sig:
+			fmt.Println("\nDisconnected.")
+			return nil
+		case <-ticker.C:
+			_ = ws.WriteJSON(map[string]string{"event": "ping"})
+		case msg, ok := <-ws.Messages():
+			if !ok {
+				return fmt.Errorf("WebSocket connection closed")
+			}
+			// Auto-respond to server-initiated pings
+			var m struct {
+				Event string `json:"event"`
+				Time  string `json:"time"`
+			}
+			if json.Unmarshal(msg, &m) == nil && m.Event == "ping" {
+				_ = ws.WriteJSON(map[string]string{"event": "pong", "time": m.Time})
+				continue
+			}
+			printMessage(msg, pr, pretty)
+		}
+	}
+}
+
+// streamPrivateMessages reads private WS messages. Auto-responds to server pings.
+// Server sends {type:"ping",time:"..."} — client must respond {type:"pong",time:"..."}
+func streamPrivateMessages(ws *wsclient.WSClient, pr *output.Printer, pretty bool) error {
+	sig := make(chan os.Signal, 1)
+	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
+
+	for {
+		select {
+		case <-sig:
+			fmt.Println("\nDisconnected.")
+			return nil
+		case msg, ok := <-ws.Messages():
+			if !ok {
+				return fmt.Errorf("WebSocket connection closed")
+			}
+			// Auto-respond to server-initiated pings
+			var m struct {
+				Type string `json:"type"`
+				Time string `json:"time"`
+			}
+			if json.Unmarshal(msg, &m) == nil && m.Type == "ping" {
+				_ = ws.WriteJSON(map[string]string{"type": "pong", "time": m.Time})
+				continue
+			}
+			printMessage(msg, pr, pretty)
+		}
+	}
+}
+
 // streamMessages reads from ws.Messages() until Ctrl-C or ws closes.
 func streamMessages(ws *wsclient.WSClient, pr *output.Printer, pretty bool) error {
 	sig := make(chan os.Signal, 1)
@@ -399,16 +411,21 @@ func streamMessages(ws *wsclient.WSClient, pr *output.Printer, pretty bool) erro
 			if !ok {
 				return fmt.Errorf("WebSocket connection closed")
 			}
-			if pretty {
-				var v interface{}
-				if err := json.Unmarshal(msg, &v); err == nil {
-					b, _ := json.MarshalIndent(v, "", "  ")
-					fmt.Println(string(b))
-					continue
-				}
-			}
-			ts := time.Now().Format("15:04:05.000")
-			pr.Line("[%s] %s", output.Dim(ts), string(msg))
+			printMessage(msg, pr, pretty)
 		}
 	}
+}
+
+// printMessage prints a WS message to the terminal, optionally pretty-printing JSON.
+func printMessage(msg []byte, pr *output.Printer, pretty bool) {
+	if pretty {
+		var v interface{}
+		if err := json.Unmarshal(msg, &v); err == nil {
+			b, _ := json.MarshalIndent(v, "", "  ")
+			fmt.Println(string(b))
+			return
+		}
+	}
+	ts := time.Now().Format("15:04:05.000")
+	pr.Line("[%s] %s", output.Dim(ts), string(msg))
 }
