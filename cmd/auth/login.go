@@ -79,9 +79,17 @@ On success, the session cookie is automatically saved to the active profile.`,
 
 			var cookieVal, userID string
 
-			// If issueID has COOKIE: prefix, no 2FA needed — cookie is inline
+			// If issueID has COOKIE: prefix, no 2FA needed — cookie is inline (JSON-encoded)
 			if strings.HasPrefix(issueID, "COOKIE:") {
-				cookieVal = strings.TrimPrefix(issueID, "COOKIE:")
+				raw := strings.TrimPrefix(issueID, "COOKIE:")
+				var ck struct {
+					Value string `json:"Value"`
+				}
+				if err := json.Unmarshal([]byte(raw), &ck); err == nil && ck.Value != "" {
+					cookieVal = ck.Value
+				} else {
+					cookieVal = raw
+				}
 			} else {
 				fmt.Println("✓ Password accepted, verification code sent to email")
 
@@ -195,7 +203,7 @@ type loginCheckResp struct {
 	Result  struct {
 		CookieStr string `json:"cookieStr"`
 		User      struct {
-			UID   int64  `json:"userId"`
+			UID   string `json:"userId"`
 			Email string `json:"email"`
 		} `json:"user"`
 	} `json:"result"`
@@ -230,15 +238,24 @@ func doLoginCheck(baseURL, issueID, code string) (cookieVal, userID string, err 
 		return "", "", fmt.Errorf("[%s] %s", out.RetCode, out.RetMsg)
 	}
 
-	// Cookie is in response body cookieStr field
+	uid := out.Result.User.UID
+
+	// cookieStr is a JSON-serialised http.Cookie — extract Value
 	if out.Result.CookieStr != "" {
-		return out.Result.CookieStr, fmt.Sprintf("%d", out.Result.User.UID), nil
+		var ck struct {
+			Value string `json:"Value"`
+		}
+		if err := json.Unmarshal([]byte(out.Result.CookieStr), &ck); err == nil && ck.Value != "" {
+			return ck.Value, uid, nil
+		}
+		// If not JSON or Value empty, use raw string as-is
+		return out.Result.CookieStr, uid, nil
 	}
 	// Fallback: check Set-Cookie header
 	for _, ck := range resp.Cookies() {
 		if ck.Name == "user_auth_name" {
-			return ck.Value, fmt.Sprintf("%d", out.Result.User.UID), nil
+			return ck.Value, uid, nil
 		}
 	}
-	return "", fmt.Sprintf("%d", out.Result.User.UID), fmt.Errorf("no cookie returned in response")
+	return "", uid, fmt.Errorf("no cookie returned in response")
 }
