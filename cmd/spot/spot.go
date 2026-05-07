@@ -3,8 +3,8 @@ package spot
 
 import (
 	"fmt"
-	"time"
 
+	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 
 	spotapi "bifu-cli/internal/api/spot"
@@ -56,7 +56,7 @@ func newOrderCreate(load LoadFn) *cobra.Command {
 				return err
 			}
 			if clientID == "" {
-				clientID = fmt.Sprintf("cli-%d", time.Now().UnixMilli())
+				clientID = uuid.NewString()
 			}
 			resp, err := c.CreateOrder(&spotapi.CreateOrderReq{
 				SymbolID:      symbol,
