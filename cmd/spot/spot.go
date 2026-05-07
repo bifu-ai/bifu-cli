@@ -3,8 +3,9 @@ package spot
 
 import (
 	"fmt"
+	"strings"
+	"time"
 
-	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 
 	spotapi "bifu-cli/internal/api/spot"
@@ -51,12 +52,23 @@ func newOrderCreate(load LoadFn) *cobra.Command {
 		Use:   "create",
 		Short: "Create a spot order",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			c, pr, err := newclient(load)
+			p, pr, err := load()
 			if err != nil {
 				return err
 			}
+			c := spotapi.New(p)
+			c.SetVerbose(pr.Verbose)
 			if clientID == "" {
-				clientID = uuid.NewString()
+				uid := p.Auth.UserID
+				if uid == "" {
+					uid = "anon"
+				}
+				ts := time.Now().UTC().Format("20060102150405")
+				sym := strings.ToLower(symbol)
+				clientID = fmt.Sprintf("%s-%s-%s-%s", uid, sym, strings.ToLower(side), ts)
+				if len(clientID) > 64 {
+					clientID = clientID[:64]
+				}
 			}
 			resp, err := c.CreateOrder(&spotapi.CreateOrderReq{
 				SymbolID:      symbol,
