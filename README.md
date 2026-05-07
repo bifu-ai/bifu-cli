@@ -458,11 +458,14 @@ bifu-cli forex order history \
 # 查看当前 WS 配置
 bifu-cli ws config show
 
-# 修改 Market WS 地址
+# 同时修改 Market WS base URL 和路径（自动合并为完整 URL）
+bifu-cli ws config set --market-url wss://quote.bifu.dev --ws-market /api/v1/public/ws
+
+# 仅修改 Market WS base URL（路径保持不变）
 bifu-cli ws config set --market-url wss://quote.bifu.dev
 
-# 修改 Market WS 路径
-bifu-cli ws config set --ws-market /api/v1/public/ws
+# 修改 Private WS（直接设置完整 URL）
+bifu-cli ws config set --private-url wss://contract.bifu.dev/api/v1/private/contract/ws
 
 # 修改 Pushgw WS
 bifu-cli ws config set --pushgw-ws wss://fxapi.bifu.dev --pushgw-path /pushgw/ws
