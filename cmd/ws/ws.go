@@ -33,7 +33,7 @@ Config subcommand manages WebSocket endpoints stored in the active profile.
   bifu-cli ws config set --market-url wss://api.bifu.dev --private-url wss://api.bifu.dev
   bifu-cli ws market --channels ticker.BTCUSDT,depth.BTCUSDT
   bifu-cli ws private
-  bifu-cli ws forex
+  bifu-cli ws private --spot
   bifu-cli ws pushgw`,
 	}
 	cmd.AddCommand(newWSConfigCmd(load))

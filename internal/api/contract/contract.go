@@ -195,6 +195,28 @@ func (c *Client) ListOpenOrders(contractID string) ([]Order, error) {
 	return parsePageDataOrders(raw.Body)
 }
 
+// ListOrderHistory returns historical contract orders with pagination.
+func (c *Client) ListOrderHistory(contractID string, limit int) ([]Order, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	params := map[string]string{
+		"pageSize": strconv.Itoa(limit),
+		"pageNo":   "0",
+	}
+	if contractID != "" {
+		if id, err := strconv.Atoi(contractID); err == nil {
+			params["contractId"] = strconv.Itoa(id)
+		}
+	}
+	u := c.profile.GetPrivateURL("/contract/order/getHistoryOrderPage")
+	raw, err := c.http.GetContract(u, params)
+	if err != nil {
+		return nil, err
+	}
+	return parsePageDataOrders(raw.Body)
+}
+
 // ListPositions returns paginated open positions.
 func (c *Client) ListPositions(contractID string) ([]Position, error) {
 	params := map[string]string{

@@ -228,20 +228,32 @@ func newOrderGet(load LoadFn) *cobra.Command {
 
 func newOrderList(load LoadFn) *cobra.Command {
 	var contractID string
+	var history bool
+	var limit int
 	cmd := &cobra.Command{
 		Use:   "list",
-		Short: "List open contract orders",
+		Short: "List open (or historical) contract orders",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			c, pr, err := newClient(load)
 			if err != nil {
 				return err
 			}
-			orders, err := c.ListOpenOrders(contractID)
-			if err != nil {
-				return err
+			var orders []contractapi.Order
+			var apiErr error
+			if history {
+				orders, apiErr = c.ListOrderHistory(contractID, limit)
+			} else {
+				orders, apiErr = c.ListOpenOrders(contractID)
+			}
+			if apiErr != nil {
+				return apiErr
 			}
 			if len(orders) == 0 {
-				pr.Line("No open orders.")
+				if history {
+					pr.Line("No order history found.")
+				} else {
+					pr.Line("No open orders.")
+				}
 				return nil
 			}
 			var rows [][]string
@@ -258,6 +270,8 @@ func newOrderList(load LoadFn) *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&contractID, "contract", "", "Filter by contract ID")
+	cmd.Flags().BoolVar(&history, "history", false, "Show order history")
+	cmd.Flags().IntVar(&limit, "limit", 50, "Limit (history only)")
 	return cmd
 }
 
