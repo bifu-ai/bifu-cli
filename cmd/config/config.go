@@ -242,11 +242,19 @@ func newInitCmd() *cobra.Command {
 			case "custom":
 				// No preset URLs — user fills in manually via config set
 			case "staging":
-				p.BaseURL = "https://fxapi.staging.bifu.dev"
-				p.WebSocketURL = "wss://fxapi.staging.bifu.dev"
+				p.BaseURL = "https://fxapi.staging.bifu.co"
+				p.WebSocketURL = "wss://fxapi.staging.bifu.co"
+				p.WSMarket = "wss://quote.staging.bifu.co/api/v1/public/ws"
+				p.WSPrivate = "wss://contract.staging.bifu.co/api/v1/private/contract/ws"
+				p.Pushgw.WSEndpoint = "wss://fxapi.staging.bifu.co"
+				p.Pushgw.WSPath = "/pushgw/ws"
 			case "prod":
-				p.BaseURL = "https://fxapi.bifu.com"
-				p.WebSocketURL = "wss://fxapi.bifu.com"
+				p.BaseURL = "https://fxapi.bifu.co"
+				p.WebSocketURL = "wss://fxapi.bifu.co"
+				p.WSMarket = "wss://quote.bifu.co/api/v1/public/ws"
+				p.WSPrivate = "wss://contract.bifu.live/api/v1/private/contract/ws"
+				p.Pushgw.WSEndpoint = "wss://fxapi.bifu.co"
+				p.Pushgw.WSPath = "/pushgw/ws"
 			default: // dev (and explicit "dev")
 				p.BaseURL = "https://fxapi.bifu.dev"
 				p.WebSocketURL = "wss://fxapi.bifu.dev"
