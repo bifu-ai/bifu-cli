@@ -71,8 +71,12 @@ On success, the session cookie is automatically saved to the active profile.`,
 			}
 
 			// ── Step 1: POST /user/login ──────────────────────────────────────
+			termType := profile.Auth.TerminalType
+			if termType == "" {
+				termType = "API"
+			}
 			fmt.Printf("Logging in as %s...\n", username)
-			issueID, err := doLogin(baseURL, username, password)
+			issueID, err := doLogin(baseURL, username, password, termType)
 			if err != nil {
 				return fmt.Errorf("login failed: %w", err)
 			}
@@ -102,7 +106,7 @@ On success, the session cookie is automatically saved to the active profile.`,
 				}
 
 				// ── Step 3: POST /user/login_check ────────────────────────────────
-				cookieVal, userID, err = doLoginCheck(baseURL, issueID, code)
+				cookieVal, userID, err = doLoginCheck(baseURL, issueID, code, termType)
 				if err != nil {
 					return fmt.Errorf("verification failed: %w", err)
 				}
@@ -157,14 +161,14 @@ type loginResp struct {
 	} `json:"result"`
 }
 
-func doLogin(baseURL, username, password string) (issueID string, err error) {
+func doLogin(baseURL, username, password, terminalType string) (issueID string, err error) {
 	body, _ := json.Marshal(loginReq{Username: username, Password: password})
 	req, err := http.NewRequest("POST", baseURL+"/user/login", bytes.NewReader(body))
 	if err != nil {
 		return "", err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("terminalType", "web")
+	req.Header.Set("terminalType", terminalType)
 	req.Header.Set("locale", "en")
 	req.Header.Set("appVersion", "1.0.0")
 
@@ -209,7 +213,7 @@ type loginCheckResp struct {
 	} `json:"result"`
 }
 
-func doLoginCheck(baseURL, issueID, code string) (cookieVal, userID string, err error) {
+func doLoginCheck(baseURL, issueID, code, terminalType string) (cookieVal, userID string, err error) {
 	body, _ := json.Marshal(loginCheckReq{
 		IssueID: issueID,
 		Code:    code,
@@ -219,7 +223,7 @@ func doLoginCheck(baseURL, issueID, code string) (cookieVal, userID string, err 
 		return "", "", err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("terminalType", "web")
+	req.Header.Set("terminalType", terminalType)
 	req.Header.Set("locale", "en")
 	req.Header.Set("appVersion", "1.0.0")
 
