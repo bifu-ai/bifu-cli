@@ -540,8 +540,11 @@ bifu-cli ws config set --private-url wss://contract.bifu.dev/api/v1/private/cont
 # 修改 Spot Private WS
 bifu-cli ws config set --ws-private-spot wss://spot.bifu.dev/api/v1/private/spot/ws
 
-# 修改 Pushgw WS
+# 修改 Pushgw WS（MT5 推送网关）
 bifu-cli ws config set --pushgw-ws wss://fxapi.bifu.dev --pushgw-path /pushgw/ws
+
+# 修改 TradFi(Fortex) 推送 WS
+bifu-cli ws config set --tradfi-ws wss://fxapi.bifu.dev/tradfi/ws
 ```
 
 ### 订阅市场行情
@@ -576,11 +579,33 @@ bifu-cli ws private --spot
 bifu-cli ws private --spot --pretty
 ```
 
-### Push 网关
+### Push 网关 / 外汇实时推送
+
+`ws pushgw` 默认连 MT5 推送网关（`/pushgw/ws`）；加 `--tradfi` 连 **TradFi(Fortex) 推送端点**（`/tradfi/ws`，真实 Fortex 行情与 tradfi 账户事件）。三种订阅模式可组合：
+
+| Flag | 说明 |
+|------|------|
+| `--tradfi` | 使用 TradFi(Fortex) 推送端点（默认 MT5 pushgw） |
+| `--market-watch` | 全品种行情快照 + 增量推送（market_watch） |
+| `--symbols A,B` | 指定品种实时 tick（symbol_update_batch） |
+| `--login-ids 1,2` | 账户持仓/订单实时推送（orderEvent） |
+| `--pretty` | 美化 JSON |
 
 ```bash
-bifu-cli ws pushgw --pretty
+# TradFi 全品种行情（真实 Fortex 报价）
+bifu-cli ws pushgw --tradfi --market-watch
+
+# TradFi 指定品种实时 tick
+bifu-cli ws pushgw --tradfi --symbols EURUSD,XAUUSD
+
+# TradFi 账户订单/持仓实时事件
+bifu-cli ws pushgw --tradfi --login-ids 800000179 --pretty
+
+# MT5 推送网关（默认）
+bifu-cli ws pushgw --market-watch --login-ids 90390034
 ```
+
+> **MT5 vs TradFi 推送**：MT5 pushgw 的 orderEvent 只反映 MT5 账户；**tradfi 账户的实时行情/订单推送必须用 `--tradfi`（/tradfi/ws）**——该端点提供真实 Fortex 行情和 tradfi 账户的 balance/equity/margin/positions。
 
 > 按 `Ctrl+C` 断开连接。
 
