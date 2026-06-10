@@ -3,6 +3,7 @@ package spot
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -12,6 +13,16 @@ import (
 	"bifu-cli/internal/clifconfig"
 	"bifu-cli/internal/output"
 )
+
+// avgFillPrice derives the average fill price from cumulative fill value / size.
+func avgFillPrice(cumValue, cumSize string) string {
+	v, err1 := strconv.ParseFloat(cumValue, 64)
+	s, err2 := strconv.ParseFloat(cumSize, 64)
+	if err1 != nil || err2 != nil || s == 0 {
+		return ""
+	}
+	return strconv.FormatFloat(v/s, 'f', -1, 64)
+}
 
 // LoadFn resolves the active profile and printer.
 type LoadFn func() (*clifconfig.Profile, *output.Printer, error)
@@ -161,7 +172,7 @@ func newOrderGet(load LoadFn) *cobra.Command {
 				{Key: "Price", Value: o.Price},
 				{Key: "Size", Value: o.Size},
 				{Key: "Filled", Value: o.FilledQuantity},
-				{Key: "Avg Price", Value: o.AveragePrice},
+				{Key: "Avg Price", Value: avgFillPrice(o.CumFillValue, o.FilledQuantity)},
 				{Key: "Status", Value: o.Status},
 			})
 			return nil

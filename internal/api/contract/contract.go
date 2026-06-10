@@ -61,8 +61,8 @@ type Order struct {
 	Status         string      `json:"status"`
 	Price          string      `json:"price"`
 	Size           string      `json:"size"`
-	FilledQuantity string      `json:"filledQuantity"`
-	AveragePrice   string      `json:"averagePrice"`
+	FilledQuantity string      `json:"cumFillSize"`
+	CumFillValue   string      `json:"cumFillValue"`
 	ReduceOnly     bool        `json:"reduceOnly"`
 	CreatedTime    interface{} `json:"createdTime"`
 }

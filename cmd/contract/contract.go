@@ -195,7 +195,7 @@ func newOrderGet(load LoadFn) *cobra.Command {
 				{Key: "Price", Value: o.Price},
 				{Key: "Size", Value: o.Size},
 				{Key: "Filled", Value: o.FilledQuantity},
-				{Key: "Avg Price", Value: o.AveragePrice},
+				{Key: "Avg Price", Value: entryPrice(o.CumFillValue, o.FilledQuantity)},
 				{Key: "Status", Value: o.Status},
 				{Key: "Reduce Only", Value: fmt.Sprintf("%v", o.ReduceOnly)},
 			})
