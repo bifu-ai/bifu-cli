@@ -64,14 +64,8 @@ type AuthProfile struct {
 	// User identity
 	UserID string `yaml:"user_id"`
 
-	// Spot trading API keys (HMAC-SHA256)
-	SpotAccessKey string `yaml:"spot_access_key"`
-	SpotSecretKey string `yaml:"spot_secret_key"`
-	SpotAccountID string `yaml:"spot_account_id"`
-
-	// Contract trading API keys
-	ContractAccessKey string `yaml:"contract_access_key"`
-	ContractSecretKey string `yaml:"contract_secret_key"`
+	// Trading account identifiers (informational; auth is via AuthCookie)
+	SpotAccountID     string `yaml:"spot_account_id"`
 	ContractAccountID string `yaml:"contract_account_id"`
 
 	// Token-based auth (gateway)

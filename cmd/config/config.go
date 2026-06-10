@@ -73,9 +73,7 @@ func newGetCmd() *cobra.Command {
 				{Key: "Public path", Value: p.PublicPath},
 				{Key: "Private path", Value: p.PrivatePath},
 				{Key: "HTTP timeout", Value: p.HTTPTimeout.String()},
-				{Key: "Spot access key", Value: maskKey(p.Auth.SpotAccessKey)},
 				{Key: "Spot account ID", Value: p.Auth.SpotAccountID},
-				{Key: "Contract access key", Value: maskKey(p.Auth.ContractAccessKey)},
 				{Key: "Contract account ID", Value: p.Auth.ContractAccountID},
 				{Key: "User ID", Value: p.Auth.UserID},
 				{Key: "Cookie auth", Value: maskKey(p.Auth.AuthCookie)},
@@ -110,11 +108,7 @@ func newSetCmd() *cobra.Command {
 		// Auth
 		authCookie        string
 		userID            string
-		spotKey           string
-		spotSecret        string
 		spotAccountID     string
-		contractKey       string
-		contractSecret    string
 		contractAccountID string
 		uToken            string
 		locale            string
@@ -133,7 +127,7 @@ func newSetCmd() *cobra.Command {
 		Use:   "set",
 		Short: "Set configuration values in a profile",
 		Example: `  bifu-cli config set --base-url https://api.bifu.dev
-  bifu-cli config set --profile dev --base-url https://api.bifu.dev --spot-key KEY --spot-secret SECRET
+  bifu-cli config set --profile dev --base-url https://api.bifu.dev
   bifu-cli config set --auth-cookie <cookie-value>
   bifu-cli config set --forex-http https://api.bifu.dev`,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -164,11 +158,7 @@ func newSetCmd() *cobra.Command {
 			})
 			setIfChanged(cmd, "auth-cookie", func() { p.Auth.AuthCookie = authCookie })
 			setIfChanged(cmd, "user-id", func() { p.Auth.UserID = userID })
-			setIfChanged(cmd, "spot-key", func() { p.Auth.SpotAccessKey = spotKey })
-			setIfChanged(cmd, "spot-secret", func() { p.Auth.SpotSecretKey = spotSecret })
 			setIfChanged(cmd, "spot-account-id", func() { p.Auth.SpotAccountID = spotAccountID })
-			setIfChanged(cmd, "contract-key", func() { p.Auth.ContractAccessKey = contractKey })
-			setIfChanged(cmd, "contract-secret", func() { p.Auth.ContractSecretKey = contractSecret })
 			setIfChanged(cmd, "contract-account-id", func() { p.Auth.ContractAccountID = contractAccountID })
 			setIfChanged(cmd, "u-token", func() { p.Auth.UToken = uToken })
 			setIfChanged(cmd, "locale", func() { p.Auth.Locale = locale })
@@ -202,11 +192,7 @@ func newSetCmd() *cobra.Command {
 	// Auth flags
 	cmd.Flags().StringVar(&authCookie, "auth-cookie", "", "user_auth_name cookie (from browser DevTools)")
 	cmd.Flags().StringVar(&userID, "user-id", "", "User ID")
-	cmd.Flags().StringVar(&spotKey, "spot-key", "", "Spot ACCESS-KEY")
-	cmd.Flags().StringVar(&spotSecret, "spot-secret", "", "Spot secret key")
 	cmd.Flags().StringVar(&spotAccountID, "spot-account-id", "", "Spot account ID")
-	cmd.Flags().StringVar(&contractKey, "contract-key", "", "Contract ACCESS-KEY")
-	cmd.Flags().StringVar(&contractSecret, "contract-secret", "", "Contract secret key")
 	cmd.Flags().StringVar(&contractAccountID, "contract-account-id", "", "Contract account ID")
 	cmd.Flags().StringVar(&uToken, "u-token", "", "u-token (gateway auth)")
 	cmd.Flags().StringVar(&locale, "locale", "", "Locale header (e.g. en, zh-CN)")
@@ -279,7 +265,7 @@ func newInitCmd() *cobra.Command {
 			pr := output.NewPrinter(output.FormatTable, false)
 			pr.OK("Profile %q initialised for env=%s", name, env)
 			pr.Line("  Config: %s", clifconfig.ConfigPath())
-			pr.Line("  Run `bifu-cli config set --profile %s --spot-key KEY --spot-secret SECRET` to add credentials.", name)
+			pr.Line("  Run `bifu-cli --profile %s auth login` to authenticate.", name)
 			return nil
 		},
 	}

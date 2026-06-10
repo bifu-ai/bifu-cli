@@ -19,7 +19,7 @@ type Client struct {
 // New creates a Contract API client from the active profile.
 func New(profile *clifconfig.Profile) *Client {
 	return &Client{
-		http:    client.NewContractHTTPClient(profile),
+		http:    client.NewHTTPClient(profile),
 		profile: profile,
 	}
 }

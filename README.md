@@ -83,14 +83,10 @@ bifu-cli config init --profile myprod --env prod
 
 ### 修改配置
 
+> 现货 / 合约 / 支付 / 外汇所有认证接口统一使用 `bifu-cli auth login` 获取的会话 Cookie，无需单独配置 API Key。
+
 ```bash
-# 设置现货 API Key
-bifu-cli config set --spot-key ACCESS_KEY --spot-secret SECRET_KEY
-
-# 设置合约 API Key
-bifu-cli config set --contract-key ACCESS_KEY --contract-secret SECRET_KEY
-
-# 设置 Cookie 认证（支付/外汇接口）
+# 设置 Cookie 认证（现货/合约/支付/外汇通用，推荐用 auth login 自动写入）
 bifu-cli config set --auth-cookie "user_auth_name=eyJhbGc..."
 
 # 设置外汇 HTTP 地址（可选）

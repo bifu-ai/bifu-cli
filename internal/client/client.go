@@ -3,16 +3,12 @@ package client
 
 import (
 	"bytes"
-	"crypto/hmac"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 	"os"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -22,108 +18,17 @@ import (
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
-// AuthMode defines which credential style is used for a request.
-type AuthMode int
-
-const (
-	AuthNone   AuthMode = iota
-	AuthCookie          // user_auth_name cookie (payment / forex)
-	AuthAPIKey          // ACCESS-KEY + HMAC-SHA256 signature (spot / contract)
-	AuthUToken          // u-token header (new gateway)
-)
-
-// Auth holds resolved credentials for a single request.
-type Auth struct {
-	AccessKey string
-	Timestamp string
-	Signature string
-}
-
-// AuthManager resolves credentials from a profile.
+// AuthManager resolves credentials from a profile. All authenticated endpoints
+// (spot / contract / payment / forex) use the same user_auth_name session cookie
+// obtained via `bifu-cli auth login`.
 type AuthManager struct {
 	mu      sync.RWMutex
 	profile *clifconfig.AuthProfile
-	mode    AuthMode
 }
 
 // NewAuthManager creates an AuthManager from the active profile auth section.
 func NewAuthManager(auth *clifconfig.AuthProfile) *AuthManager {
-	mode := AuthNone
-	switch {
-	case auth.SpotAccessKey != "":
-		mode = AuthAPIKey
-	case auth.UToken != "":
-		mode = AuthUToken
-	case auth.AuthCookie != "":
-		mode = AuthCookie
-	}
-	return &AuthManager{profile: auth, mode: mode}
-}
-
-// NewContractAuthManager is like NewAuthManager but prefers contract keys.
-func NewContractAuthManager(auth *clifconfig.AuthProfile) *AuthManager {
-	am := NewAuthManager(auth)
-	if auth.ContractAccessKey != "" {
-		am.mode = AuthAPIKey
-	}
-	return am
-}
-
-// SignAPIKey builds an HMAC-SHA256 signature matching ApiAuthInterceptor:
-// message = URI + "|" + timestamp  (URI = path WITHOUT query params)
-func SignAPIKey(secretKey, timestamp, method, path, body string) string {
-	msg := path + "|" + timestamp
-	mac := hmac.New(sha256.New, []byte(secretKey))
-	mac.Write([]byte(msg))
-	return hex.EncodeToString(mac.Sum(nil))
-}
-
-// ApplySpot sets Spot API-Key auth headers on an existing request.
-// Direct map assignment is used to bypass Go's header canonicalization so that
-// "Decode-MM-Auth-Access-Key" is sent verbatim (not "Decode-Mm-Auth-Access-Key").
-// Falls back to cookie auth when no API key is configured.
-func (am *AuthManager) ApplySpot(req *http.Request, bodyStr string) {
-	am.mu.RLock()
-	defer am.mu.RUnlock()
-	if am.profile.SpotAccessKey == "" {
-		// No API key configured — fall back to cookie auth (same cookie used by forex/payment)
-		am.applyCookieLocked(req)
-		return
-	}
-	ts := strconv.FormatInt(time.Now().UnixMilli(), 10)
-	sig := SignAPIKey(am.profile.SpotSecretKey, ts, req.Method, req.URL.Path, bodyStr)
-	req.Header["Decode-MM-Auth-Access-Key"] = []string{am.profile.SpotAccessKey}
-	req.Header["Decode-MM-Auth-Timestamp"] = []string{ts}
-	req.Header["Decode-MM-Auth-Signature"] = []string{sig}
-	req.Header["terminalType"] = []string{am.profile.TerminalType}
-	req.Header["locale"] = []string{am.profile.Locale}
-}
-
-// ApplyContract sets Contract API-Key auth headers.
-// Direct map assignment is used to bypass Go's header canonicalization so that
-// "Decode-MM-Auth-Access-Key" is sent verbatim (not "Decode-Mm-Auth-Access-Key").
-// Falls back to cookie auth when no API key is configured.
-func (am *AuthManager) ApplyContract(req *http.Request, bodyStr string) {
-	am.mu.RLock()
-	defer am.mu.RUnlock()
-	key := am.profile.ContractAccessKey
-	sec := am.profile.ContractSecretKey
-	if key == "" {
-		key = am.profile.SpotAccessKey
-		sec = am.profile.SpotSecretKey
-	}
-	if key == "" {
-		// No API key configured — fall back to cookie auth
-		am.applyCookieLocked(req)
-		return
-	}
-	ts := strconv.FormatInt(time.Now().UnixMilli(), 10)
-	sig := SignAPIKey(sec, ts, req.Method, req.URL.Path, bodyStr)
-	req.Header["Decode-MM-Auth-Access-Key"] = []string{key}
-	req.Header["Decode-MM-Auth-Timestamp"] = []string{ts}
-	req.Header["Decode-MM-Auth-Signature"] = []string{sig}
-	req.Header["terminalType"] = []string{am.profile.TerminalType}
-	req.Header["locale"] = []string{am.profile.Locale}
+	return &AuthManager{profile: auth}
 }
 
 // ApplyCookie sets the user_auth_name cookie header.
@@ -165,17 +70,9 @@ func NewHTTPClient(profile *clifconfig.Profile) *HTTPClient {
 	}
 }
 
-// NewContractHTTPClient creates a client using the Contract credential set.
-func NewContractHTTPClient(profile *clifconfig.Profile) *HTTPClient {
-	c := NewHTTPClient(profile)
-	c.auth = NewContractAuthManager(&profile.Auth)
-	return c
-}
-
 // NewPaymentHTTPClient creates a client using cookie auth (payment/forex endpoints).
 func NewPaymentHTTPClient(profile *clifconfig.Profile) *HTTPClient {
-	c := NewHTTPClient(profile)
-	return c
+	return NewHTTPClient(profile)
 }
 
 // HTTPResponse wraps the raw HTTP response.
@@ -187,35 +84,35 @@ type HTTPResponse struct {
 
 // GetSpot performs an authenticated GET for Spot endpoints.
 func (c *HTTPClient) GetSpot(rawURL string, params map[string]string) (*HTTPResponse, error) {
-	return c.do("GET", rawURL, params, nil, true, false)
+	return c.do("GET", rawURL, params, nil)
 }
 
 // GetContract performs an authenticated GET for Contract endpoints.
 func (c *HTTPClient) GetContract(rawURL string, params map[string]string) (*HTTPResponse, error) {
-	return c.do("GET", rawURL, params, nil, false, true)
+	return c.do("GET", rawURL, params, nil)
 }
 
 // GetPayment performs a cookie-authenticated GET for Payment endpoints.
 func (c *HTTPClient) GetPayment(rawURL string, params map[string]string) (*HTTPResponse, error) {
-	return c.do("GET", rawURL, params, nil, false, false)
+	return c.do("GET", rawURL, params, nil)
 }
 
 // PostSpot performs an authenticated POST for Spot endpoints.
 func (c *HTTPClient) PostSpot(rawURL string, body interface{}) (*HTTPResponse, error) {
-	return c.do("POST", rawURL, nil, body, true, false)
+	return c.do("POST", rawURL, nil, body)
 }
 
 // PostContract performs an authenticated POST for Contract endpoints.
 func (c *HTTPClient) PostContract(rawURL string, body interface{}) (*HTTPResponse, error) {
-	return c.do("POST", rawURL, nil, body, false, true)
+	return c.do("POST", rawURL, nil, body)
 }
 
 // PostPayment performs a cookie-authenticated POST for Payment endpoints.
 func (c *HTTPClient) PostPayment(rawURL string, body interface{}) (*HTTPResponse, error) {
-	return c.do("POST", rawURL, nil, body, false, false)
+	return c.do("POST", rawURL, nil, body)
 }
 
-func (c *HTTPClient) do(method, rawURL string, params map[string]string, body interface{}, signSpot, signContract bool) (*HTTPResponse, error) {
+func (c *HTTPClient) do(method, rawURL string, params map[string]string, body interface{}) (*HTTPResponse, error) {
 	// Build query string
 	u, err := url.Parse(rawURL)
 	if err != nil {
@@ -247,15 +144,8 @@ func (c *HTTPClient) do(method, rawURL string, params map[string]string, body in
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	// Apply auth
-	switch {
-	case signSpot:
-		c.auth.ApplySpot(req, bodyStr)
-	case signContract:
-		c.auth.ApplyContract(req, bodyStr)
-	default:
-		c.auth.ApplyCookie(req)
-	}
+	// Apply auth — all authenticated endpoints use the session cookie.
+	c.auth.ApplyCookie(req)
 
 	if c.Verbose {
 		fmt.Fprintf(os.Stderr, "[HTTP] %s %s\n", method, u.String())
@@ -285,7 +175,7 @@ func (c *HTTPClient) do(method, rawURL string, params map[string]string, body in
 	}
 
 	if resp.StatusCode == 401 {
-		return nil, fmt.Errorf("authentication failed (HTTP 401): API key may be expired or invalid")
+		return nil, fmt.Errorf("authentication failed (HTTP 401): session expired or invalid — run `bifu-cli auth login`")
 	}
 	if resp.StatusCode == 403 {
 		msg := strings.TrimSpace(string(data))
