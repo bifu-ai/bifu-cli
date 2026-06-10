@@ -41,6 +41,76 @@ Examples:
 	}
 	cmd.AddCommand(newOrderCmd(load))
 	cmd.AddCommand(newPositionsCmd(load))
+	cmd.AddCommand(newAccountCmd(load))
+	return cmd
+}
+
+// ── forex account ─────────────────────────────────────────────────────────────
+
+func newAccountCmd(load LoadFn) *cobra.Command {
+	cmd := &cobra.Command{Use: "account", Short: "Manage forex accounts (create)"}
+	cmd.AddCommand(newAccountCreate(load))
+	return cmd
+}
+
+func newAccountCreate(load LoadFn) *cobra.Command {
+	var platform, accType, subType, currency, password string
+	var leverage int64
+
+	cmd := &cobra.Command{
+		Use:   "create",
+		Short: "Create a forex account (MT5 or TradFi/Fortex)",
+		Long: `Create a new forex trading account.
+
+--platform mt5     → MT5 account (mt_type=2)
+--platform tradfi  → TradFi/Fortex account (mt_type=3; requires the user to be
+                     in the tradfi whitelist, otherwise the backend rejects it).`,
+		Example: `  bifu-cli forex account create --platform tradfi --type demo --currency USD --leverage 100 --password 'Pass123!'
+  bifu-cli forex account create --platform mt5 --type demo --currency USD --leverage 100 --password 'Pass123!'`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			c, pr, err := newClient(load)
+			if err != nil {
+				return err
+			}
+			mtType := int32(2)
+			switch platform {
+			case "tradfi", "fortex", "TradFi":
+				mtType = 3
+			case "mt5", "MT5", "":
+				mtType = 2
+			default:
+				return fmt.Errorf("unknown --platform %q (use: mt5 | tradfi)", platform)
+			}
+			acct, err := c.CreateForexAccount(&paymentapi.CreateForexAccountReq{
+				Type:     accType,
+				Currency: currency,
+				Leverage: leverage,
+				Password: password,
+				SubType:  subType,
+				MtType:   mtType,
+			})
+			if err != nil {
+				return err
+			}
+			pr.OK("Forex account created")
+			pr.PrintKV([]output.KV{
+				{Key: "Login", Value: acct.Login},
+				{Key: "Platform", Value: acct.PlatformName()},
+				{Key: "Type", Value: acct.Type + "/" + acct.SubType},
+				{Key: "Currency", Value: acct.Currency},
+				{Key: "Leverage", Value: acct.Leverage},
+				{Key: "Status", Value: acct.Status},
+			})
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&platform, "platform", "mt5", "Platform: mt5 | tradfi")
+	cmd.Flags().StringVar(&accType, "type", "demo", "Account type: live | demo")
+	cmd.Flags().StringVar(&subType, "sub-type", "normal", "Sub-type: normal | signal | copyTrade")
+	cmd.Flags().StringVar(&currency, "currency", "USD", "Account currency (e.g. USD)")
+	cmd.Flags().Int64Var(&leverage, "leverage", 100, "Leverage")
+	cmd.Flags().StringVar(&password, "password", "", "Account password (required)")
+	_ = cmd.MarkFlagRequired("password")
 	return cmd
 }
 
@@ -107,12 +177,16 @@ func newOrderCreate(load LoadFn) *cobra.Command {
 	var loginID int64
 	var symbol, typ, expiration string
 	var volume, sl, tp, price float64
+	var orderType, side, lots, fillPolicy, stopLimitPrice, expirationType string
 
 	cmd := &cobra.Command{
 		Use:   "create",
-		Short: "Place a forex order",
-		Example: `  bifu-cli forex order create --login-id 90390034 --symbol EURUSD --type buy --volume 0.01 --sl 1.02 --tp 1.08
-  bifu-cli forex order create --login-id 90390034 --symbol GBPUSD --type buyLimit --volume 0.01 --price 1.25`,
+		Short: "Place a forex order (MT5 or TradFi — routed by account platform)",
+		Example: `  # MT5 / TradFi 通用（按 login-id 的账户平台自动路由）
+  bifu-cli forex order create --login-id 90390034 --symbol EURUSD --type buy --volume 0.01 --sl 1.02 --tp 1.08
+  bifu-cli forex order create --login-id 90390034 --symbol GBPUSD --type buyLimit --volume 0.01 --price 1.25
+  # TradFi 专用字段（仅 mt_type=3 账户生效；不传则由 --type 推导 orderType/side）
+  bifu-cli forex order create --login-id 800000175 --symbol EURUSD --order-type Market --side Buy --lots 0.01`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			c, pr, err := newClient(load)
 			if err != nil {
@@ -130,6 +204,13 @@ func newOrderCreate(load LoadFn) *cobra.Command {
 			if cmd.Flags().Changed("expiration") {
 				req.Expiration = expiration
 			}
+			// TradFi-only overrides (ignored by MT5 accounts).
+			req.OrderType = orderType
+			req.Side = side
+			req.Lots = lots
+			req.FillPolicy = fillPolicy
+			req.StopLimitPrice = stopLimitPrice
+			req.ExpirationType = expirationType
 			resp, err := c.CreateForexOrder(req)
 			if err != nil {
 				return err
@@ -153,9 +234,16 @@ func newOrderCreate(load LoadFn) *cobra.Command {
 	cmd.Flags().Float64Var(&sl, "sl", 0, "Stop loss price")
 	cmd.Flags().Float64Var(&tp, "tp", 0, "Take profit price")
 	cmd.Flags().StringVar(&expiration, "expiration", "", "Expiration time (RFC3339, e.g. 2026-12-31T18:00:00.000Z)")
+	// TradFi(Fortex)-only flags (mt_type=3 accounts); ignored by MT5.
+	cmd.Flags().StringVar(&orderType, "order-type", "", "TradFi order type: Market|Limit|Stop|StopLimit (overrides --type)")
+	cmd.Flags().StringVar(&side, "side", "", "TradFi side: Buy|Sell (overrides --type)")
+	cmd.Flags().StringVar(&lots, "lots", "", "TradFi lots (alternative to --volume)")
+	cmd.Flags().StringVar(&fillPolicy, "fill-policy", "", "TradFi fill policy")
+	cmd.Flags().StringVar(&stopLimitPrice, "stop-limit-price", "", "TradFi StopLimit trigger price")
+	cmd.Flags().StringVar(&expirationType, "expiration-type", "", "TradFi expiration type")
 	_ = cmd.MarkFlagRequired("login-id")
 	_ = cmd.MarkFlagRequired("symbol")
-	_ = cmd.MarkFlagRequired("type")
+	// --type is optional: TradFi accounts may instead use --order-type + --side.
 	return cmd
 }
 

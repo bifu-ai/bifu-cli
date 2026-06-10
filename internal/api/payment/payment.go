@@ -70,8 +70,24 @@ type ForexAccountItem struct {
 	MarginLevel string `json:"marginLevel"`
 	Group       string `json:"group"`
 	GroupType   string `json:"groupType"`
+	MtType      int    `json:"mtType"`   // 1=MT4, 2=MT5, 3=TradFi(Fortex)
+	Currency    string `json:"currency"`
 	IsDefault   bool   `json:"isDefault"`
 	Enable      bool   `json:"enable"`
+}
+
+// PlatformName maps the mtType code to a human-readable trading platform name.
+func (a ForexAccountItem) PlatformName() string {
+	switch a.MtType {
+	case 1:
+		return "MT4"
+	case 2:
+		return "MT5"
+	case 3:
+		return "TradFi"
+	default:
+		return fmt.Sprintf("mt%d", a.MtType)
+	}
 }
 
 type CreateForexOrderReq struct {
@@ -84,6 +100,28 @@ type CreateForexOrderReq struct {
 	TP         float64 `json:"tp"`    // 0 = no take profit
 	Comment    string  `json:"comment"`
 	Expiration string  `json:"expiration,omitempty"`
+
+	// TradFi(Fortex)-only optional fields (ignored by MT5 accounts).
+	// When the account's mt_type=3, the backend routes to TradFi and, if these
+	// are empty, derives orderType/side from Type.
+	OrderType      string `json:"orderType,omitempty"`      // Market|Limit|Stop|StopLimit
+	Side           string `json:"side,omitempty"`           // Buy|Sell
+	Lots           string `json:"lots,omitempty"`           // alternative to volume
+	StopLimitPrice string `json:"stopLimitPrice,omitempty"` // StopLimit trigger price
+	ExpirationType string `json:"expirationType,omitempty"`
+	FillPolicy     string `json:"fillPolicy,omitempty"`
+}
+
+// CreateForexAccountReq is the request body for POST /payment/mt5/create-forex-account.
+// mt_type selects the platform: 2=MT5, 3=TradFi(Fortex).
+type CreateForexAccountReq struct {
+	Type      string `json:"type"`     // live | demo
+	Currency  string `json:"currency"` // e.g. USD
+	Leverage  int64  `json:"leverage"`
+	Password  string `json:"password"`
+	SubType   string `json:"subType,omitempty"` // normal | signal | copyTrade
+	MtType    int32  `json:"mtType"`            // 2=MT5, 3=TradFi
+	IsPremier bool   `json:"isPremier,omitempty"`
 }
 
 type CreateForexOrderResult struct {
@@ -343,6 +381,24 @@ func (c *Client) GetForexAccountList() ([]ForexAccountItem, error) {
 	return result.Items, nil
 }
 
+// CreateForexAccount creates a new forex (MT5 or TradFi) account.
+// Returns the newly created account. Requires the user to be in the tradfi
+// whitelist when MtType=3.
+func (c *Client) CreateForexAccount(req *CreateForexAccountReq) (*ForexAccountItem, error) {
+	u := c.profile.GetPaymentURL("/mt5/create-forex-account")
+	raw, err := c.http.PostPayment(u, req)
+	if err != nil {
+		return nil, err
+	}
+	var result struct {
+		Item ForexAccountItem `json:"item"`
+	}
+	if err := client.ParsePaymentResponse(raw.Body, &result); err != nil {
+		return nil, err
+	}
+	return &result.Item, nil
+}
+
 // Transfer moves funds between saving and forex accounts.
 // req.Type: 1=forex_to_saving, 2=saving_to_forex.
 func (c *Client) Transfer(req *TransferReq) error {
@@ -378,6 +434,7 @@ type UnifiedTransferReq struct {
 	Amount          string              `json:"amount"`
 	Currency        string              `json:"currency,omitempty"`
 	CoinID          int32               `json:"coin_id,omitempty"`
+	MtType          int32               `json:"mt_type,omitempty"` // forex transfers: 2=MT5, 3=TradFi (0→MT5)
 	Comment         string              `json:"comment,omitempty"`
 }
 

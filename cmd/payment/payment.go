@@ -95,7 +95,8 @@ func newBalanceCmd(load LoadFn) *cobra.Command {
 
 func newUnifiedTransferCmd(load LoadFn) *cobra.Command {
 	var fromStr, toStr, amount, currency, comment string
-	var coinID int32
+	var coinID, mtType int32
+	var fromAccountID, toAccountID int64
 
 	acctType := map[string]paymentapi.TransferAccountType{
 		"SAVING":   paymentapi.TransferAccountTypeSaving,
@@ -146,10 +147,13 @@ Account types:
 
 			req := &paymentapi.UnifiedTransferReq{
 				FromAccountType: fromType,
+				FromAccountID:   fromAccountID,
 				ToAccountType:   toType,
+				ToAccountID:     toAccountID,
 				Amount:          amount,
 				Currency:        currency,
 				CoinID:          coinID,
+				MtType:          mtType,
 				Comment:         comment,
 			}
 			resp, err := c.UnifiedTransfer(req)
@@ -171,7 +175,10 @@ Account types:
 	cmd.Flags().StringVar(&toStr, "to", "", "Destination account type (SAVING/FOREX/FUNDING/SPOT/CONTRACT/EARN)")
 	cmd.Flags().StringVar(&amount, "amount", "", "Amount to transfer")
 	cmd.Flags().StringVar(&currency, "currency", "", "Currency code for fiat accounts (e.g. USD)")
-	cmd.Flags().Int32Var(&coinID, "coin-id", 0, "Coin ID for crypto accounts (e.g. 1=USDT)")
+	cmd.Flags().Int32Var(&coinID, "coin-id", 0, "Coin ID for crypto accounts (dev: 2=USDT)")
+	cmd.Flags().Int64Var(&fromAccountID, "from-account-id", 0, "Source account ID/login (e.g. forex login when --from FOREX)")
+	cmd.Flags().Int64Var(&toAccountID, "to-account-id", 0, "Destination account ID/login (e.g. forex login when --to FOREX)")
+	cmd.Flags().Int32Var(&mtType, "mt-type", 0, "Forex platform for FOREX transfers: 2=MT5, 3=TradFi (0→MT5)")
 	cmd.Flags().StringVar(&comment, "comment", "", "Optional remark")
 	_ = cmd.MarkFlagRequired("from")
 	_ = cmd.MarkFlagRequired("to")
@@ -202,9 +209,9 @@ func newForexAccountsCmd(load LoadFn) *cobra.Command {
 			}
 			rows := make([][]string, 0, len(items))
 			for _, a := range items {
-				rows = append(rows, []string{a.Login, a.Type + "/" + a.SubType, a.Status, a.Balance, a.Equity, a.MarginFree, a.Leverage, a.GroupType})
+				rows = append(rows, []string{a.Login, a.PlatformName(), a.Type + "/" + a.SubType, a.Status, a.Balance, a.Equity, a.MarginFree, a.Leverage, a.GroupType})
 			}
-			pr.PrintTable([]string{"LOGIN", "TYPE", "STATUS", "BALANCE", "EQUITY", "FREE MARGIN", "LEVERAGE", "GROUP"}, rows)
+			pr.PrintTable([]string{"LOGIN", "PLATFORM", "TYPE", "STATUS", "BALANCE", "EQUITY", "FREE MARGIN", "LEVERAGE", "GROUP"}, rows)
 			return nil
 		},
 	}

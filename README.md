@@ -379,11 +379,38 @@ bifu-cli payment unified-transfer --from CONTRACT --to FUNDING --amount 10 --coi
 
 ---
 
-## forex — 外汇(MT5)交易
+## forex — 外汇(MT5 / TradFi)交易
 
 > 外汇接口通过 Cookie 认证，需先执行 `bifu-cli auth login` 登录或手动设置 Cookie。
 
+> **MT5 与 TradFi(Fortex) 双平台**：后端按账户的 `mt_type` 自动路由（`2`=MT5，`3`=TradFi/Fortex）。
+> 所有 `forex order` 命令对两种平台通用——只要传对应账户的 `--login-id` 即可，无需切换命令。
+> 用 `bifu-cli payment forex-accounts` 的 **PLATFORM** 列区分账户平台。
+
+### 创建账户
+
+```bash
+# 创建 TradFi(Fortex) demo 账户（mt_type=3；需用户在 tradfi 白名单内）
+bifu-cli forex account create --platform tradfi --type demo --currency USD --leverage 100 --password 'Pass123!'
+
+# 创建 MT5 demo 账户
+bifu-cli forex account create --platform mt5 --type demo --currency USD --leverage 100 --password 'Pass123!'
+```
+
+### 账户充值/划转
+
+```bash
+# 储蓄 → 外汇账户（live 账户；TradFi 需 --mt-type 3，--to-account-id 传外汇账户内部 id）
+bifu-cli payment unified-transfer --from SAVING --to FOREX --amount 1000 --currency USD --to-account-id <forexAccountId> --mt-type 3
+```
+
+> 注意：saving→forex 划转仅支持 **live** 账户且币种需匹配；demo 账户充值由后端单独的 demo 通道处理。
+
 ### 订单类型
+
+> MT5 用小写类型名（buy/sell/buyLimit…）。TradFi 也可直接用 `--order-type Market|Limit|Stop|StopLimit` + `--side Buy|Sell`（不传则由 `--type` 自动推导）。
+
+| 类型 | 说明 | 成交条件 |
 
 | 类型 | 说明 | 成交条件 |
 |------|------|----------|
@@ -414,6 +441,11 @@ bifu-cli forex order create \
   --volume 0.01 \
   --price 1.0500 \
   --expiration "2026-12-31T18:00:00Z"
+
+# TradFi(Fortex) 账户下单（login-id 为 mt_type=3 账户，自动路由到 TradFi）
+bifu-cli forex order create --login-id 800000175 --symbol EURUSD --type buy --volume 0.01
+# 或用 TradFi 原生字段
+bifu-cli forex order create --login-id 800000175 --symbol EURUSD --order-type Market --side Buy --lots 0.01
 ```
 
 ### 修改订单
