@@ -390,10 +390,10 @@ bifu-cli payment unified-transfer --from CONTRACT --to FUNDING --amount 10 --coi
 ### 创建账户
 
 ```bash
-# 创建 TradFi(Fortex) 账户（mt_type=3）。需用户在 tradfi 白名单内——
+# 创建 TradFi(Fortex) 账户（mt_type=3，默认 live）。需用户在 tradfi 白名单内——
 # CLI 会自动为当前用户设置 tradfi-whitelist 属性（POST /user/set_user_attribute），无需手动操作。
-bifu-cli forex account create --platform tradfi --type live --currency USD --leverage 100 --password 'Pass123!'
-# 加 --no-whitelist 可跳过自动白名单
+bifu-cli forex account create --platform tradfi --currency USD --leverage 100 --password 'Pass123!'
+# 显式指定类型 / 跳过自动白名单：--type demo / --no-whitelist
 
 # 创建 MT5 demo 账户
 bifu-cli forex account create --platform mt5 --type demo --currency USD --leverage 100 --password 'Pass123!'

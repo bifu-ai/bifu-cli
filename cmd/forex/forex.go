@@ -66,7 +66,7 @@ func newAccountCreate(load LoadFn) *cobra.Command {
 --platform mt5     → MT5 account (mt_type=2)
 --platform tradfi  → TradFi/Fortex account (mt_type=3; requires the user to be
                      in the tradfi whitelist, otherwise the backend rejects it).`,
-		Example: `  bifu-cli forex account create --platform tradfi --type demo --currency USD --leverage 100 --password 'Pass123!'
+		Example: `  bifu-cli forex account create --platform tradfi --currency USD --leverage 100 --password 'Pass123!'   # 默认 live
   bifu-cli forex account create --platform mt5 --type demo --currency USD --leverage 100 --password 'Pass123!'`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			c, pr, err := newClient(load)
@@ -116,7 +116,7 @@ func newAccountCreate(load LoadFn) *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&platform, "platform", "mt5", "Platform: mt5 | tradfi")
-	cmd.Flags().StringVar(&accType, "type", "demo", "Account type: live | demo")
+	cmd.Flags().StringVar(&accType, "type", "live", "Account type: live | demo")
 	cmd.Flags().StringVar(&subType, "sub-type", "normal", "Sub-type: normal | signal | copyTrade")
 	cmd.Flags().StringVar(&currency, "currency", "USD", "Account currency (e.g. USD)")
 	cmd.Flags().Int64Var(&leverage, "leverage", 100, "Leverage")
