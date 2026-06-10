@@ -144,11 +144,9 @@ func (c *Client) CancelOrder(req *CancelOrderReq) error {
 func (c *Client) CancelAllOrders(symbolID string) error {
 	req := map[string]interface{}{}
 	if symbolID != "" {
-		if id, err := strconv.Atoi(symbolID); err == nil {
-			req["instrumentId"] = id
-		}
+		req["filterSymbolIdList"] = []string{symbolID}
 	}
-	u := c.profile.GetPrivateURL("/spot/order/cancelAllOrders")
+	u := c.profile.GetPrivateURL("/spot/order/cancelAllOrder")
 	raw, err := c.http.PostSpot(u, req)
 	if err != nil {
 		return err

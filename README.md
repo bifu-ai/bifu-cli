@@ -191,24 +191,28 @@ bifu-cli spot balance
 bifu-cli spot balance -o json
 ```
 
+> `--symbol` 传的是**数值 symbolId**（不是 `BTCUSDT` 这种名称）。常用 dev 现货 symbolId：
+> `90000001` = BTC-USDT、`90000002` = ETH-USDT、`90000004` = SOL-USDT、`90000010` = DOGE-USDT。
+> 完整列表见 `GET /api/v1/public/meta/getMetaData` 的 `symbolList`。
+
 ### 下单
 
 ```bash
-# 市价买入 0.01 BTC
-bifu-cli spot order create --symbol BTCUSDT --side BUY --size 0.01
+# 市价买入 0.0001 BTC（symbolId 90000001）
+bifu-cli spot order create --symbol 90000001 --side BUY --size 0.0001
 
 # 限价卖出
-bifu-cli spot order create --symbol BTCUSDT --side SELL --type LIMIT --price 100000 --size 0.01
+bifu-cli spot order create --symbol 90000001 --side SELL --type LIMIT --price 100000 --size 0.001
 
 # 指定 TIF
-bifu-cli spot order create --symbol ETHUSDT --side BUY --size 0.1 --tif IMMEDIATE_OR_CANCEL
+bifu-cli spot order create --symbol 90000002 --side BUY --size 0.1 --tif IMMEDIATE_OR_CANCEL
 ```
 
 | Flag | 说明 | 默认值 |
 |------|------|--------|
-| `--symbol` / `-s` | 交易对（必填） | — |
+| `--symbol` / `-s` | 数值 symbolId（必填，见 getMetaData） | — |
 | `--side` | BUY / SELL（必填） | — |
-| `--size` | 数量（必填） | — |
+| `--size` | 数量，按 base 币计（必填） | — |
 | `--type` | MARKET / LIMIT / STOP_LIMIT | `MARKET` |
 | `--price` | 限价价格 | `0` |
 | `--tif` | 时效：GOOD_TIL_CANCEL / IMMEDIATE_OR_CANCEL / FILL_OR_KILL | `GOOD_TIL_CANCEL` |
@@ -217,14 +221,14 @@ bifu-cli spot order create --symbol ETHUSDT --side BUY --size 0.1 --tif IMMEDIAT
 ### 查询订单
 
 ```bash
-# 查询单个订单
-bifu-cli spot order get --order-id 123456789
+# 查询单个挂单（仅返回活动单；已成交/已撤的用 --history 查）
+bifu-cli spot order get --order-id 759472786740609900
 
 # 查看所有挂单
 bifu-cli spot order list
 
-# 指定交易对
-bifu-cli spot order list --symbol BTCUSDT
+# 指定 symbolId
+bifu-cli spot order list --symbol 90000001
 
 # 查看历史订单
 bifu-cli spot order list --history --limit 20
@@ -234,13 +238,13 @@ bifu-cli spot order list --history --limit 20
 
 ```bash
 # 撤销指定订单
-bifu-cli spot order cancel --order-id 123456789
+bifu-cli spot order cancel --order-id 759472786740609900
 
 # 撤销所有挂单
 bifu-cli spot order cancel --all
 
-# 撤销指定交易对的所有挂单
-bifu-cli spot order cancel --all --symbol BTCUSDT
+# 撤销指定 symbolId 的所有挂单
+bifu-cli spot order cancel --all --symbol 90000001
 ```
 
 ---
@@ -257,55 +261,50 @@ bifu-cli contract account
 
 ```bash
 bifu-cli contract position list
+
+# 按合约过滤
+bifu-cli contract position --contract 10000001
 ```
 
 ### 下单
 
+> `--contract` 传的是**数值 contractId**（不是 `BTC-USDT-SWAP`）。dev 上 `10000001` = BTC 永续。
+> 仓位方向用 `--side LONG|SHORT`，下单方向用 `--order-side BUY|SELL`：开多=LONG+BUY，平多=LONG+SELL（加 `--reduce-only`），开空=SHORT+SELL，平空=SHORT+BUY。
+
 ```bash
-# 做多 (开多仓)
-bifu-cli contract order create \
-  --contract-id BTC-USDT-SWAP \
-  --side OPEN_LONG \
-  --size 1
+# 市价开多 0.001
+bifu-cli contract order create --contract 10000001 --side LONG --order-side BUY --size 0.001
 
-# 做空 (开空仓)
-bifu-cli contract order create \
-  --contract-id BTC-USDT-SWAP \
-  --side OPEN_SHORT \
-  --size 1 \
-  --type LIMIT \
-  --price 95000
+# 限价开空
+bifu-cli contract order create --contract 10000001 --side SHORT --order-side SELL --type LIMIT --price 95000 --size 0.001
 
-# 平多
-bifu-cli contract order create \
-  --contract-id BTC-USDT-SWAP \
-  --side CLOSE_LONG \
-  --size 1
+# 市价平多（reduce-only）
+bifu-cli contract order create --contract 10000001 --side LONG --order-side SELL --size 0.001 --reduce-only
 ```
 
 ### 查询订单
 
 ```bash
-bifu-cli contract order get --order-id 123456789
+bifu-cli contract order get --order-id 759471776194363801   # 仅活动单
 bifu-cli contract order list
-bifu-cli contract order list --contract-id BTC-USDT-SWAP
+bifu-cli contract order list --contract 10000001
+bifu-cli contract order list --history --limit 20
 ```
 
-### 撤单 / 修改
+### 撤单
 
 ```bash
 # 撤销指定订单
-bifu-cli contract order cancel --order-id 123456789
+bifu-cli contract order cancel --order-id 759471776194363801
+
+# 撤销所有挂单
+bifu-cli contract order cancel --all
 
 # 撤销指定合约的所有挂单
-bifu-cli contract order cancel --all --contract BTC-USDT-SWAP
-
-# 修改价格
-bifu-cli contract order modify --order-id 123456789 --price 96000
-
-# 修改数量
-bifu-cli contract order modify --order-id 123456789 --size 2
+bifu-cli contract order cancel --all --contract 10000001
 ```
+
+> 后端不支持改单（无 modify 接口）；如需改价/改量，撤单后重新下单。
 
 ---
 
@@ -354,15 +353,20 @@ bifu-cli payment unified-transfer --from FOREX --to SAVING --amount 500 --curren
 # 储蓄 → 现货
 bifu-cli payment unified-transfer --from SAVING --to SPOT --amount 100 --currency USD
 
-# 资金账户 → 现货
-bifu-cli payment unified-transfer --from FUNDING --to SPOT --amount 10 --coin-id 1
+# 储蓄 → 合约
+bifu-cli payment unified-transfer --from SAVING --to CONTRACT --amount 100 --currency USD
+
+# 资金账户 → 现货（coin-id 见下方说明）
+bifu-cli payment unified-transfer --from FUNDING --to SPOT --amount 10 --coin-id 2
 
 # 现货 → 合约
-bifu-cli payment unified-transfer --from SPOT --to CONTRACT --amount 10 --coin-id 1
+bifu-cli payment unified-transfer --from SPOT --to CONTRACT --amount 10 --coin-id 2
 
 # 合约 → 资金账户
-bifu-cli payment unified-transfer --from CONTRACT --to FUNDING --amount 10 --coin-id 1
+bifu-cli payment unified-transfer --from CONTRACT --to FUNDING --amount 10 --coin-id 2
 ```
+
+> **coin-id 说明**：coin-id 是数值币种 ID，因环境而异，查 `getMetaData`。dev 环境 **`2` = USDT、`1` = BTC**。从法币 SAVING 划入加密账户时用 `--currency USD` 即可（自动换成 USDT 入账到对应 coin）。
 
 | Flag | 说明 | 示例 |
 |------|------|------|
@@ -370,7 +374,7 @@ bifu-cli payment unified-transfer --from CONTRACT --to FUNDING --amount 10 --coi
 | `--to` | 转入账户类型（必填） | `FOREX` |
 | `--amount` | 划转金额（必填） | `100` |
 | `--currency` | 法币代码（法币类账户必填） | `USD` |
-| `--coin-id` | 加密币 ID（加密类账户必填，1=USDT） | `1` |
+| `--coin-id` | 加密币数值 ID（加密类账户必填，dev: 2=USDT） | `2` |
 | `--comment` | 备注（可选） | `recharge` |
 
 ---

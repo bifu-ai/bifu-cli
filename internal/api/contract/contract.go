@@ -139,11 +139,9 @@ func (c *Client) CancelOrder(orderID, clientOrderID string) error {
 func (c *Client) CancelAllOrders(contractID string) error {
 	req := map[string]interface{}{}
 	if contractID != "" {
-		if id, err := strconv.Atoi(contractID); err == nil {
-			req["instrumentId"] = id
-		}
+		req["filterContractIdList"] = []string{contractID}
 	}
-	u := c.profile.GetPrivateURL("/contract/order/cancelAllOrders")
+	u := c.profile.GetPrivateURL("/contract/order/cancelAllOrder")
 	raw, err := c.http.PostContract(u, req)
 	if err != nil {
 		return err
