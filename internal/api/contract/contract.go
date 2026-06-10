@@ -69,14 +69,12 @@ type Order struct {
 
 type Position struct {
 	ContractID   interface{} `json:"contractId"`
-	PositionSide string      `json:"positionSide"`
+	PositionSide string      `json:"side"`
 	MarginMode   string      `json:"marginMode"`
 	Size         string      `json:"size"`
-	EntryPrice   string      `json:"entryPrice"`
-	MarkPrice    string      `json:"markPrice"`
-	Pnl          string      `json:"unrealizedPnl"`
+	OpenValue    string      `json:"openValue"`
+	OpenFee      string      `json:"openFee"`
 	Leverage     string      `json:"leverage"`
-	LiqPrice     string      `json:"liquidationPrice"`
 }
 
 type accountAsset struct {

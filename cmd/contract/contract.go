@@ -3,6 +3,7 @@ package contract
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -12,6 +13,16 @@ import (
 	"bifu-cli/internal/clifconfig"
 	"bifu-cli/internal/output"
 )
+
+// entryPrice derives the average entry price from open value / size.
+func entryPrice(openValue, size string) string {
+	ov, err1 := strconv.ParseFloat(openValue, 64)
+	sz, err2 := strconv.ParseFloat(size, 64)
+	if err1 != nil || err2 != nil || sz == 0 {
+		return ""
+	}
+	return strconv.FormatFloat(ov/sz, 'f', -1, 64)
+}
 
 // LoadFn resolves the active profile and printer.
 type LoadFn func() (*clifconfig.Profile, *output.Printer, error)
@@ -270,11 +281,11 @@ func newPositionCmd(load LoadFn) *cobra.Command {
 				rows = append(rows, []string{
 					fmt.Sprintf("%v", p.ContractID),
 					p.PositionSide, p.MarginMode, p.Size,
-					p.EntryPrice, p.MarkPrice, p.Pnl,
-					p.Leverage, p.LiqPrice,
+					entryPrice(p.OpenValue, p.Size),
+					p.OpenValue, p.Leverage, p.OpenFee,
 				})
 			}
-			pr.PrintTable([]string{"CONTRACT", "SIDE", "MARGIN", "SIZE", "ENTRY", "MARK", "UPNL", "LEVERAGE", "LIQ_PRICE"}, rows)
+			pr.PrintTable([]string{"CONTRACT", "SIDE", "MARGIN", "SIZE", "ENTRY", "OPEN_VALUE", "LEVERAGE", "OPEN_FEE"}, rows)
 			return nil
 		},
 	}
