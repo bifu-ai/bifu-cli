@@ -3,11 +3,39 @@
 package payment
 
 import (
+	"encoding/json"
+	"strings"
+
 	"fmt"
 
 	"bifu-cli/internal/client"
 	"bifu-cli/internal/clifconfig"
 )
+
+// flexStr unmarshals from a JSON string OR number into a Go string.
+// The forex close-orders endpoint returns numeric-looking fields as plain
+// numbers for MT5 but as quoted strings for TradFi; this accepts both.
+type flexStr string
+
+func (f *flexStr) UnmarshalJSON(b []byte) error {
+	s := strings.TrimSpace(string(b))
+	if s == "" || s == "null" {
+		*f = ""
+		return nil
+	}
+	if s[0] == '"' {
+		var str string
+		if err := json.Unmarshal(b, &str); err != nil {
+			return err
+		}
+		*f = flexStr(str)
+		return nil
+	}
+	*f = flexStr(s)
+	return nil
+}
+
+func (f flexStr) String() string { return string(f) }
 
 // Client is the Payment API client (cookie auth).
 type Client struct {
@@ -178,13 +206,13 @@ type ForexOpenOrder struct {
 }
 
 type ForexHistoryOrder struct {
-	Ticket     int64   `json:"ticket"`
+	Ticket     flexStr `json:"ticket"`
 	Symbol     string  `json:"symbol"`
-	Type       string  `json:"type"`
-	Volume     float64 `json:"volume"`
-	OpenPrice  float64 `json:"openPrice"`
-	ClosePrice float64 `json:"closePrice"`
-	Profit     float64 `json:"profit"`
+	Type       flexStr `json:"orderType"`
+	Volume     flexStr `json:"lots"`
+	OpenPrice  flexStr `json:"openPrice"`
+	ClosePrice flexStr `json:"closePrice"`
+	Profit     flexStr `json:"profit"`
 	OpenTime   string  `json:"openTime"`
 	CloseTime  string  `json:"closeTime"`
 }
@@ -379,6 +407,22 @@ func (c *Client) GetForexAccountList() ([]ForexAccountItem, error) {
 		return nil, err
 	}
 	return result.Items, nil
+}
+
+type setUserAttributeReq struct {
+	Name  string `json:"name"`
+	Value string `json:"value"`
+}
+
+// SetUserAttribute sets an attribute on the current (cookie-authenticated) user.
+// Used to self-enroll into the tradfi whitelist: SetUserAttribute("tradfi-whitelist", "1").
+func (c *Client) SetUserAttribute(name, value string) error {
+	u := c.profile.BaseURL + "/user/set_user_attribute"
+	raw, err := c.http.PostPayment(u, setUserAttributeReq{Name: name, Value: value})
+	if err != nil {
+		return err
+	}
+	return client.ParsePaymentResponse(raw.Body, nil)
 }
 
 // CreateForexAccount creates a new forex (MT5 or TradFi) account.

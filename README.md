@@ -390,21 +390,29 @@ bifu-cli payment unified-transfer --from CONTRACT --to FUNDING --amount 10 --coi
 ### 创建账户
 
 ```bash
-# 创建 TradFi(Fortex) demo 账户（mt_type=3；需用户在 tradfi 白名单内）
-bifu-cli forex account create --platform tradfi --type demo --currency USD --leverage 100 --password 'Pass123!'
+# 创建 TradFi(Fortex) 账户（mt_type=3）。需用户在 tradfi 白名单内——
+# CLI 会自动为当前用户设置 tradfi-whitelist 属性（POST /user/set_user_attribute），无需手动操作。
+bifu-cli forex account create --platform tradfi --type live --currency USD --leverage 100 --password 'Pass123!'
+# 加 --no-whitelist 可跳过自动白名单
 
 # 创建 MT5 demo 账户
 bifu-cli forex account create --platform mt5 --type demo --currency USD --leverage 100 --password 'Pass123!'
 ```
 
+> 创建成功会回显 **Login**（下单用）和 **Account ID**（内部 id，划转入金用）。
+
 ### 账户充值/划转
 
 ```bash
-# 储蓄 → 外汇账户（live 账户；TradFi 需 --mt-type 3，--to-account-id 传外汇账户内部 id）
-bifu-cli payment unified-transfer --from SAVING --to FOREX --amount 1000 --currency USD --to-account-id <forexAccountId> --mt-type 3
+# 储蓄 → TradFi 外汇账户入金（已验证）
+#   --to-account-id 传创建时回显的 Account ID（内部 id，非 login）
+#   --from-account-id 传 USD 储蓄账户 id（见 payment balance 的 id）
+#   --mt-type 3 = TradFi（MT5 用 2 或省略）
+bifu-cli payment unified-transfer --from SAVING --to FOREX --amount 100 --currency USD \
+  --from-account-id <savingAccountId> --to-account-id <forexAccountId> --mt-type 3
 ```
 
-> 注意：saving→forex 划转仅支持 **live** 账户且币种需匹配；demo 账户充值由后端单独的 demo 通道处理。
+> 注意：saving→forex 划转要求 **live** 账户且币种匹配（demo 账户后端单独处理）。
 
 ### 订单类型
 

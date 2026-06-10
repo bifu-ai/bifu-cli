@@ -56,6 +56,7 @@ func newAccountCmd(load LoadFn) *cobra.Command {
 func newAccountCreate(load LoadFn) *cobra.Command {
 	var platform, accType, subType, currency, password string
 	var leverage int64
+	var noWhitelist bool
 
 	cmd := &cobra.Command{
 		Use:   "create",
@@ -81,6 +82,15 @@ func newAccountCreate(load LoadFn) *cobra.Command {
 			default:
 				return fmt.Errorf("unknown --platform %q (use: mt5 | tradfi)", platform)
 			}
+			// TradFi accounts require the user to be in the tradfi whitelist.
+			// Self-enroll by default (idempotent) unless --no-whitelist is set.
+			if mtType == 3 && !noWhitelist {
+				if err := c.SetUserAttribute("tradfi-whitelist", "1"); err != nil {
+					pr.Line("⚠ could not set tradfi-whitelist attribute: %v (continuing)", err)
+				} else {
+					pr.Line("✓ tradfi-whitelist enabled for current user")
+				}
+			}
 			acct, err := c.CreateForexAccount(&paymentapi.CreateForexAccountReq{
 				Type:     accType,
 				Currency: currency,
@@ -95,6 +105,7 @@ func newAccountCreate(load LoadFn) *cobra.Command {
 			pr.OK("Forex account created")
 			pr.PrintKV([]output.KV{
 				{Key: "Login", Value: acct.Login},
+				{Key: "Account ID", Value: acct.ID}, // internal id — use as --to-account-id when funding
 				{Key: "Platform", Value: acct.PlatformName()},
 				{Key: "Type", Value: acct.Type + "/" + acct.SubType},
 				{Key: "Currency", Value: acct.Currency},
@@ -110,6 +121,7 @@ func newAccountCreate(load LoadFn) *cobra.Command {
 	cmd.Flags().StringVar(&currency, "currency", "USD", "Account currency (e.g. USD)")
 	cmd.Flags().Int64Var(&leverage, "leverage", 100, "Leverage")
 	cmd.Flags().StringVar(&password, "password", "", "Account password (required)")
+	cmd.Flags().BoolVar(&noWhitelist, "no-whitelist", false, "Do not auto-enroll into tradfi whitelist (tradfi only)")
 	_ = cmd.MarkFlagRequired("password")
 	return cmd
 }
@@ -383,12 +395,12 @@ func newOrderHistory(load LoadFn) *cobra.Command {
 			var rows [][]string
 			for _, o := range orders {
 				rows = append(rows, []string{
-					strconv.FormatInt(o.Ticket, 10),
-					o.Symbol, o.Type,
-					strconv.FormatFloat(o.Volume, 'f', 2, 64),
-					strconv.FormatFloat(o.OpenPrice, 'f', 5, 64),
-					strconv.FormatFloat(o.ClosePrice, 'f', 5, 64),
-					strconv.FormatFloat(o.Profit, 'f', 2, 64),
+					o.Ticket.String(),
+					o.Symbol, o.Type.String(),
+					o.Volume.String(),
+					o.OpenPrice.String(),
+					o.ClosePrice.String(),
+					o.Profit.String(),
 					o.OpenTime, o.CloseTime,
 				})
 			}
