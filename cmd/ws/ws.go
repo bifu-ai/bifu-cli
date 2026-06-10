@@ -65,14 +65,15 @@ func newWSConfigCmd(load LoadFn) *cobra.Command {
 				{Key: "Market WS", Value: p.GetWSMarketURL()},
 				{Key: "Private WS (contract)", Value: p.GetWSPrivateURL()},
 				{Key: "Private WS (spot)", Value: p.GetWSPrivateSpotURL()},
-				{Key: "Pushgw WS", Value: p.GetPushgwWSURL()},
+				{Key: "Pushgw WS (MT5)", Value: p.GetPushgwWSURL()},
+				{Key: "TradFi WS", Value: p.GetTradfiWSURL()},
 			})
 			return nil
 		},
 	})
 
 	// ws config set
-	var marketURL, privateURL, pushgwWS, pushgwPath, wsMarket, wsPrivate, wsPrivateSpot string
+	var marketURL, privateURL, pushgwWS, pushgwPath, wsMarket, wsPrivate, wsPrivateSpot, tradfiWS string
 	setCmd := &cobra.Command{
 		Use:   "set",
 		Short: "Set WebSocket endpoints in the active profile",
@@ -115,6 +116,9 @@ func newWSConfigCmd(load LoadFn) *cobra.Command {
 			if cmd.Flags().Changed("pushgw-path") {
 				p.Pushgw.WSPath = pushgwPath
 			}
+			if cmd.Flags().Changed("tradfi-ws") {
+				p.Pushgw.TradfiWS = tradfiWS
+			}
 			if err := cfg.Save(); err != nil {
 				return err
 			}
@@ -128,8 +132,9 @@ func newWSConfigCmd(load LoadFn) *cobra.Command {
 	setCmd.Flags().StringVar(&wsMarket, "ws-market", "", "Market WS path")
 	setCmd.Flags().StringVar(&wsPrivate, "ws-private", "", "Private WS path (contract)")
 	setCmd.Flags().StringVar(&wsPrivateSpot, "ws-private-spot", "", "Private WS path or full URL (spot)")
-	setCmd.Flags().StringVar(&pushgwWS, "pushgw-ws", "", "Pushgw WS base URL")
-	setCmd.Flags().StringVar(&pushgwPath, "pushgw-path", "", "Pushgw WS path")
+	setCmd.Flags().StringVar(&pushgwWS, "pushgw-ws", "", "Pushgw WS base URL (MT5)")
+	setCmd.Flags().StringVar(&pushgwPath, "pushgw-path", "", "Pushgw WS path (MT5)")
+	setCmd.Flags().StringVar(&tradfiWS, "tradfi-ws", "", "TradFi(Fortex) push WS full URL (e.g. wss://fxapi.bifu.dev/tradfi/ws)")
 	cmd.AddCommand(setCmd)
 	return cmd
 }
@@ -218,25 +223,30 @@ func newWSPushgwCmd(load LoadFn) *cobra.Command {
 	var symbols []string
 	var loginIDs []int64
 	var marketWatch bool
+	var tradfi bool
 	cmd := &cobra.Command{
 		Use:   "pushgw",
-		Short: "Subscribe to push gateway real-time events",
+		Short: "Subscribe to push gateway real-time events (MT5 or TradFi)",
 		Long: `Connect to the push gateway WebSocket and subscribe to market or trading events.
 
-Three subscription modes (can be combined):
+平台选择：
+  默认            MT5 push gateway (/pushgw/ws)
+  --tradfi        TradFi(Fortex) push 端点 (/tradfi/ws) —— 真实 Fortex 行情与 tradfi 账户事件
+
+三种订阅模式 (可组合)：
   --market-watch       全品种行情快照 + 增量推送 (market_watch event)
-  --symbols EURUSD,... 指定品种 tick 推送
-  --login-ids 123,...  MT5 账户持仓/订单实时推送 (orderEvent)`,
-		Example: `  # 全品种行情
-  bifu-cli ws pushgw --market-watch
+  --symbols EURUSD,... 指定品种 tick 推送 (symbol_update_batch)
+  --login-ids 123,...  账户持仓/订单实时推送 (orderEvent)`,
+		Example: `  # TradFi 全品种行情 (真实 Fortex 报价)
+  bifu-cli ws pushgw --tradfi --market-watch
 
-  # 指定品种 tick
-  bifu-cli ws pushgw --symbols EURUSD,XAUUSD,BTCUSD
+  # TradFi 指定品种 tick
+  bifu-cli ws pushgw --tradfi --symbols EURUSD,XAUUSD
 
-  # MT5 账户订单/持仓事件
-  bifu-cli ws pushgw --login-ids 90390034
+  # TradFi 账户订单/持仓事件
+  bifu-cli ws pushgw --tradfi --login-ids 800000179
 
-  # 组合：行情 + 账户事件
+  # MT5 push gateway (默认)
   bifu-cli ws pushgw --market-watch --login-ids 90390034 --pretty`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			p, pr, err := load()
@@ -244,10 +254,15 @@ Three subscription modes (can be combined):
 				return err
 			}
 			url := p.GetPushgwWSURL()
-			if url == "" {
-				return fmt.Errorf("pushgw WebSocket URL not configured (run: bifu-cli ws config set --pushgw-ws <url>)")
+			label := "Pushgw WebSocket (MT5): "
+			if tradfi {
+				url = p.GetTradfiWSURL()
+				label = "TradFi WebSocket: "
 			}
-			pr.Header("Pushgw WebSocket: " + url)
+			if url == "" {
+				return fmt.Errorf("WebSocket URL not configured (run: bifu-cli ws config set --pushgw-ws <url> / --tradfi-ws <url>)")
+			}
+			pr.Header(label + url)
 			if marketWatch {
 				pr.Line("Subscriptions: market_watch (all symbols)")
 			}
@@ -263,7 +278,12 @@ Three subscription modes (can be combined):
 			}
 			pr.Line("Press Ctrl+C to stop\n")
 
-			ws := wsclient.NewPushgwWSClient(p)
+			var ws *wsclient.WSClient
+			if tradfi {
+				ws = wsclient.NewTradfiWSClient(p)
+			} else {
+				ws = wsclient.NewPushgwWSClient(p)
+			}
 			if err := ws.Connect(); err != nil {
 				return fmt.Errorf("connect: %w", err)
 			}
@@ -298,9 +318,10 @@ Three subscription modes (can be combined):
 		},
 	}
 	cmd.Flags().BoolVar(&pretty, "pretty", false, "Pretty-print JSON messages")
+	cmd.Flags().BoolVar(&tradfi, "tradfi", false, "Use the TradFi(Fortex) push endpoint (/tradfi/ws) instead of MT5 pushgw")
 	cmd.Flags().BoolVar(&marketWatch, "market-watch", false, "Subscribe to market_watch (all symbols snapshot + updates)")
 	cmd.Flags().StringSliceVar(&symbols, "symbols", nil, "Symbol(s) to subscribe for tick updates (e.g. EURUSD,XAUUSD)")
-	cmd.Flags().Int64SliceVar(&loginIDs, "login-ids", nil, "MT5 login ID(s) for orderEvent subscription")
+	cmd.Flags().Int64SliceVar(&loginIDs, "login-ids", nil, "Login ID(s) for orderEvent subscription")
 	return cmd
 }
 

@@ -59,9 +59,14 @@ func NewWSPrivateSpotClient(profile *clifconfig.Profile) *WSClient {
 	return c
 }
 
-// NewPushgwWSClient creates a client for the real-time forex quote WebSocket.
+// NewPushgwWSClient creates a client for the real-time forex quote WebSocket (MT5 push gateway).
 func NewPushgwWSClient(profile *clifconfig.Profile) *WSClient {
 	return NewWSClient(profile, profile.GetPushgwWSURL())
+}
+
+// NewTradfiWSClient creates a client for the TradFi(Fortex) push WebSocket.
+func NewTradfiWSClient(profile *clifconfig.Profile) *WSClient {
+	return NewWSClient(profile, profile.GetTradfiWSURL())
 }
 
 // Connect opens the WebSocket connection.

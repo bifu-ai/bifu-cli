@@ -86,7 +86,8 @@ type ForexProfile struct {
 // PushgwProfile holds real-time forex quote WebSocket settings.
 type PushgwProfile struct {
 	WSEndpoint string `yaml:"ws_endpoint"`
-	WSPath     string `yaml:"ws_path"` // e.g. /pushgw/ws
+	WSPath     string `yaml:"ws_path"`   // MT5 push gateway, e.g. /pushgw/ws
+	TradfiWS   string `yaml:"tradfi_ws"` // TradFi(Fortex) push WS full URL, e.g. wss://fxapi.bifu.dev/tradfi/ws
 }
 
 // ── Defaults ──────────────────────────────────────────────────────────────────
@@ -239,9 +240,21 @@ func (p *Profile) GetWSPrivateSpotURL() string {
 	return p.WebSocketURL + p.WSPrivateSpot
 }
 
-// GetPushgwWSURL returns the pushgw WebSocket URL.
+// GetPushgwWSURL returns the MT5 pushgw WebSocket URL.
 func (p *Profile) GetPushgwWSURL() string {
 	return p.Pushgw.WSEndpoint + p.Pushgw.WSPath
+}
+
+// GetTradfiWSURL returns the TradFi(Fortex) push WebSocket URL.
+// Falls back to <pushgw endpoint>/tradfi/ws when not explicitly configured.
+func (p *Profile) GetTradfiWSURL() string {
+	if p.Pushgw.TradfiWS != "" {
+		return p.Pushgw.TradfiWS
+	}
+	if p.Pushgw.WSEndpoint != "" {
+		return p.Pushgw.WSEndpoint + "/tradfi/ws"
+	}
+	return ""
 }
 
 // ── Internal ──────────────────────────────────────────────────────────────────

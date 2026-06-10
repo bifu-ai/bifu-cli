@@ -241,6 +241,7 @@ func newInitCmd() *cobra.Command {
 				p.WSPrivateSpot = "wss://spot.staging.bifu.co/api/v1/private/spot/ws"
 				p.Pushgw.WSEndpoint = "wss://fxapi.staging.bifu.co"
 				p.Pushgw.WSPath = "/pushgw/ws"
+				p.Pushgw.TradfiWS = "wss://fxapi.staging.bifu.co/tradfi/ws"
 			case "prod":
 				p.BaseURL = "https://fxapi.bifu.co"
 				p.WebSocketURL = "wss://fxapi.bifu.co"
@@ -249,6 +250,7 @@ func newInitCmd() *cobra.Command {
 				p.WSPrivateSpot = "wss://spot.bifu.live/api/v1/private/spot/ws"
 				p.Pushgw.WSEndpoint = "wss://fxapi.bifu.co"
 				p.Pushgw.WSPath = "/pushgw/ws"
+				p.Pushgw.TradfiWS = "wss://fxapi.bifu.co/tradfi/ws"
 			default: // dev (and explicit "dev")
 				p.BaseURL = "https://fxapi.bifu.dev"
 				p.WebSocketURL = "wss://fxapi.bifu.dev"
@@ -257,6 +259,7 @@ func newInitCmd() *cobra.Command {
 				p.WSPrivateSpot = "wss://spot.bifu.dev/api/v1/private/spot/ws"
 				p.Pushgw.WSEndpoint = "wss://fxapi.bifu.dev"
 				p.Pushgw.WSPath = "/pushgw/ws"
+				p.Pushgw.TradfiWS = "wss://fxapi.bifu.dev/tradfi/ws"
 			}
 
 			if err := cfg.Save(); err != nil {
