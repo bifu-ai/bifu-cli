@@ -44,7 +44,6 @@ func newOrderCmd(load LoadFn) *cobra.Command {
 	cmd := &cobra.Command{Use: "order", Short: "Manage contract orders"}
 	cmd.AddCommand(newOrderCreate(load))
 	cmd.AddCommand(newOrderCancel(load))
-	cmd.AddCommand(newOrderModify(load))
 	cmd.AddCommand(newOrderGet(load))
 	cmd.AddCommand(newOrderList(load))
 	return cmd
@@ -159,35 +158,6 @@ func newOrderCancel(load LoadFn) *cobra.Command {
 	cmd.Flags().StringVar(&clientID, "client-id", "", "Client order ID")
 	cmd.Flags().StringVar(&contractID, "contract", "", "Cancel all orders for contract")
 	cmd.Flags().BoolVar(&all, "all", false, "Cancel all open orders")
-	return cmd
-}
-
-func newOrderModify(load LoadFn) *cobra.Command {
-	var orderID, clientID, price, qty string
-	cmd := &cobra.Command{
-		Use:   "modify",
-		Short: "Modify a contract order price or size",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			c, pr, err := newClient(load)
-			if err != nil {
-				return err
-			}
-			if err := c.ModifyOrder(&contractapi.ModifyOrderReq{
-				OrderID:       orderID,
-				ClientOrderID: clientID,
-				NewPrice:      price,
-				NewQuantity:   qty,
-			}); err != nil {
-				return err
-			}
-			pr.OK("Order modified")
-			return nil
-		},
-	}
-	cmd.Flags().StringVar(&orderID, "order-id", "", "Order ID")
-	cmd.Flags().StringVar(&clientID, "client-id", "", "Client order ID")
-	cmd.Flags().StringVar(&price, "price", "", "New price")
-	cmd.Flags().StringVar(&qty, "size", "", "New size")
 	return cmd
 }
 

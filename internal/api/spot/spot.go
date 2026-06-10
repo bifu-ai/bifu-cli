@@ -48,7 +48,7 @@ type OrderResp struct {
 }
 
 type Order struct {
-	OrderID        string      `json:"orderId"`
+	OrderID        string      `json:"id"`
 	SymbolID       interface{} `json:"symbolId"`
 	OrderSide      string      `json:"orderSide"`
 	Type           string      `json:"type"`
@@ -121,7 +121,7 @@ func (c *Client) CreateOrder(req *CreateOrderReq) (*OrderResp, error) {
 func (c *Client) CancelOrder(req *CancelOrderReq) error {
 	if req.OrderID != "" {
 		u := c.profile.GetPrivateURL("/spot/order/cancelOrderById")
-		body := map[string]string{"orderId": req.OrderID}
+		body := map[string]interface{}{"orderIdList": []string{req.OrderID}}
 		raw, err := c.http.PostSpot(u, body)
 		if err != nil {
 			return err

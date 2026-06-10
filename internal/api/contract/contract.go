@@ -53,7 +53,7 @@ type OrderResp struct {
 }
 
 type Order struct {
-	OrderID        string      `json:"orderId"`
+	OrderID        string      `json:"id"`
 	ContractID     interface{} `json:"contractId"`
 	PositionSide   string      `json:"positionSide"`
 	OrderSide      string      `json:"orderSide"`
@@ -98,13 +98,6 @@ type AccountInfo struct {
 	Assets    []accountAsset // aggregated from getAccountAsset
 }
 
-type ModifyOrderReq struct {
-	OrderID       string `json:"orderId,omitempty"`
-	ClientOrderID string `json:"clientOrderId,omitempty"`
-	NewPrice      string `json:"newPrice,omitempty"`
-	NewQuantity   string `json:"newQuantity,omitempty"`
-}
-
 // ── Methods ───────────────────────────────────────────────────────────────────
 
 // CreateOrder places a new contract order.
@@ -125,7 +118,7 @@ func (c *Client) CreateOrder(req *CreateOrderReq) (*OrderResp, error) {
 func (c *Client) CancelOrder(orderID, clientOrderID string) error {
 	if orderID != "" {
 		u := c.profile.GetPrivateURL("/contract/order/cancelOrderById")
-		body := map[string]string{"orderId": orderID}
+		body := map[string]interface{}{"orderIdList": []string{orderID}}
 		raw, err := c.http.PostContract(u, body)
 		if err != nil {
 			return err
@@ -249,16 +242,6 @@ func (c *Client) GetAccount() (*AccountInfo, error) {
 	}
 	outer.Account.Assets = outer.Assets
 	return &outer.Account, nil
-}
-
-// ModifyOrder modifies an existing contract order (price/size) by order ID.
-func (c *Client) ModifyOrder(req *ModifyOrderReq) error {
-	u := c.profile.GetPrivateURL("/contract/order/modifyOrderById")
-	raw, err := c.http.PostContract(u, req)
-	if err != nil {
-		return err
-	}
-	return client.ParseAPIResponse(raw.Body, nil)
 }
 
 // ── helpers ───────────────────────────────────────────────────────────────────
