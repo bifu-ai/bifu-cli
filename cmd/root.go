@@ -27,9 +27,18 @@ var version = "dev"
 var (
 	globalProfile string
 	globalOutput  string
+	globalJSON    bool
 	globalVerbose bool
 	globalYes     bool
 )
+
+// resolvedFormat applies the --json shortcut over --output.
+func resolvedFormat() output.Format {
+	if globalJSON {
+		return output.FormatJSON
+	}
+	return output.Format(globalOutput)
+}
 
 var rootCmd = &cobra.Command{
 	Use:   "bifu-cli",
@@ -63,6 +72,8 @@ func init() {
 		"Config profile to use (see: bifu-cli config list); defaults to active profile")
 	rootCmd.PersistentFlags().StringVarP(&globalOutput, "output", "o", "table",
 		"Output format: table | json | plain")
+	rootCmd.PersistentFlags().BoolVar(&globalJSON, "json", false,
+		"Shortcut for --output json")
 	rootCmd.PersistentFlags().BoolVarP(&globalVerbose, "verbose", "v", false,
 		"Enable verbose/debug output")
 	rootCmd.PersistentFlags().BoolVarP(&globalYes, "yes", "y", false,
@@ -101,11 +112,12 @@ func loadCtx() (*clifconfig.Profile, *output.Printer, error) {
 	}
 	// else: use cfg.ActiveProfile from config file (set via `config use`)
 
+	format := resolvedFormat()
 	// Spinners on stderr would interleave badly with machine-readable JSON.
-	client.ShowSpinner = globalOutput != string(output.FormatJSON)
+	client.ShowSpinner = format != output.FormatJSON
 
 	profile := cfg.Active()
-	printer := output.NewPrinter(output.Format(globalOutput), globalVerbose)
+	printer := output.NewPrinter(format, globalVerbose)
 	return profile, printer, nil
 }
 

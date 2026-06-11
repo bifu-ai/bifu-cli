@@ -1,0 +1,11 @@
+# Build artifacts
+/bin/
+dist/
+
+# Local env / secrets
+*.env
+.env
+
+# OS / editor
+.DS_Store
+*.swp
