@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"os/exec"
+	"runtime"
 	"strings"
 	"time"
 
@@ -19,18 +21,30 @@ import (
 // newLoginCmd builds the `auth login` subcommand.
 func newLoginCmd(load LoadFn) *cobra.Command {
 	var username, password string
+	var web bool
+	var loginURL string
 
 	cmd := &cobra.Command{
 		Use:   "login",
-		Short: "Login with email/password and save session cookie",
-		Long: `Login to BifuFX using your email and password.
+		Short: "Login and save session cookie (email/password, or --web)",
+		Long: `Login to BifuFX and save the session cookie to the active profile.
 
-An email verification code will be sent and you will be prompted to enter it.
-On success, the session cookie is automatically saved to the active profile.`,
+Default: email/password — a verification code is sent to your email and you
+are prompted to enter it.
+
+--web: open the web login page in your browser, then paste back the
+user_auth_name cookie. The page URL comes from --url, else the profile's
+web_url (set it once with: bifu-cli config set --web-url https://<webapp>).`,
 		Example: `  bifu-cli auth login
   bifu-cli auth login --username user@example.com
-  bifu-cli --profile dev auth login`,
+  bifu-cli --profile dev auth login
+  bifu-cli auth login --web
+  bifu-cli auth login --web --url https://app.bifu.dev/login`,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if web {
+				return runWebLogin(load, loginURL)
+			}
+
 			profile, _, err := load()
 			if err != nil {
 				return err
@@ -137,7 +151,86 @@ On success, the session cookie is automatically saved to the active profile.`,
 
 	cmd.Flags().StringVarP(&username, "username", "u", "", "Email / username")
 	cmd.Flags().StringVar(&password, "password", "", "Password (omit to be prompted securely)")
+	cmd.Flags().BoolVar(&web, "web", false, "Login via browser: open the web login page and capture the session cookie")
+	cmd.Flags().StringVar(&loginURL, "url", "", "Web login page URL (used with --web; defaults to profile web_url)")
 	return cmd
+}
+
+// runWebLogin opens the web login page in the browser and captures the
+// user_auth_name cookie pasted back by the user. Works against the existing
+// backend without any server-side changes.
+func runWebLogin(load LoadFn, explicitURL string) error {
+	profile, _, err := load()
+	if err != nil {
+		return err
+	}
+
+	url := explicitURL
+	if url == "" {
+		url = profile.WebURL
+	}
+	if url == "" {
+		return fmt.Errorf("no web login URL — pass --url <web-login-page>, or set it once:\n" +
+			"  bifu-cli config set --web-url https://<webapp>")
+	}
+
+	fmt.Printf("Opening %s in your browser...\n", url)
+	if err := openBrowser(url); err != nil {
+		fmt.Printf("⚠ could not open the browser automatically (%v)\n  Open this URL manually:\n  %s\n", err, url)
+	}
+
+	fmt.Println()
+	fmt.Println("After logging in, copy the session cookie value:")
+	fmt.Println("  DevTools → Application → Cookies → user_auth_name → Value")
+	fmt.Print("\nPaste user_auth_name cookie: ")
+
+	reader := bufio.NewReader(os.Stdin)
+	line, _ := reader.ReadString('\n')
+	cookieVal := normalizeCookie(line)
+	if cookieVal == "" {
+		return fmt.Errorf("no cookie provided")
+	}
+
+	cfg, err := clifconfig.Load()
+	if err != nil {
+		return fmt.Errorf("load config: %w", err)
+	}
+	p := cfg.EnsureProfile(profile.Name)
+	p.Auth.AuthCookie = cookieVal
+	if err := cfg.Save(); err != nil {
+		return fmt.Errorf("save config: %w", err)
+	}
+
+	fmt.Printf("✓ Cookie saved to profile %q\n", profile.Name)
+	fmt.Printf("  cookie : %s\n", cookieVal)
+	return nil
+}
+
+// normalizeCookie extracts the bare user_auth_name value from whatever the user
+// pasted: a raw value, a `user_auth_name=...` pair, or a full Cookie header.
+func normalizeCookie(s string) string {
+	s = strings.TrimSpace(s)
+	s = strings.Trim(s, `"'`)
+	if i := strings.Index(s, "user_auth_name="); i >= 0 {
+		s = s[i+len("user_auth_name="):]
+	}
+	// A pasted Cookie header may contain other cookies after a separator.
+	if i := strings.IndexByte(s, ';'); i >= 0 {
+		s = s[:i]
+	}
+	return strings.TrimSpace(strings.Trim(s, `"'`))
+}
+
+// openBrowser launches the OS default browser at url.
+func openBrowser(url string) error {
+	switch runtime.GOOS {
+	case "darwin":
+		return exec.Command("open", url).Start()
+	case "windows":
+		return exec.Command("rundll32", "url.dll,FileProtocolHandler", url).Start()
+	default:
+		return exec.Command("xdg-open", url).Start()
+	}
 }
 
 // ── API helpers ───────────────────────────────────────────────────────────────

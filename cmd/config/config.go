@@ -64,6 +64,7 @@ func newGetCmd() *cobra.Command {
 				{Key: "Active profile", Value: cfg.ActiveProfile},
 				{Key: "Config file", Value: clifconfig.ConfigPath()},
 				{Key: "Base URL", Value: p.BaseURL},
+				{Key: "Web URL", Value: p.WebURL},
 				{Key: "WebSocket URL", Value: p.WebSocketURL},
 				{Key: "WS Market", Value: p.WSMarket},
 				{Key: "WS Private", Value: p.WSPrivate},
@@ -95,6 +96,7 @@ func newSetCmd() *cobra.Command {
 	var (
 		profile      string
 		baseURL      string
+		webURL       string
 		wsURL        string
 		grpcSpot     string
 		grpcContract string
@@ -143,6 +145,7 @@ func newSetCmd() *cobra.Command {
 
 			// Apply only the flags that were explicitly set
 			setIfChanged(cmd, "base-url", func() { p.BaseURL = baseURL })
+			setIfChanged(cmd, "web-url", func() { p.WebURL = webURL })
 			setIfChanged(cmd, "ws-url", func() { p.WebSocketURL = wsURL })
 			setIfChanged(cmd, "grpc-spot", func() { p.GrpcSpot = grpcSpot })
 			setIfChanged(cmd, "grpc-contract", func() { p.GrpcContract = grpcContract })
@@ -180,6 +183,7 @@ func newSetCmd() *cobra.Command {
 	cmd.Flags().StringVar(&profile, "profile", "", "Profile to update (default: active profile)")
 	// Endpoint flags
 	cmd.Flags().StringVar(&baseURL, "base-url", "", "HTTP API base URL")
+	cmd.Flags().StringVar(&webURL, "web-url", "", "Web app login page URL (used by `auth login --web`)")
 	cmd.Flags().StringVar(&wsURL, "ws-url", "", "WebSocket base URL")
 	cmd.Flags().StringVar(&grpcSpot, "grpc-spot", "", "Spot gRPC address (host:port)")
 	cmd.Flags().StringVar(&grpcContract, "grpc-contract", "", "Contract gRPC address (host:port)")
@@ -235,6 +239,7 @@ func newInitCmd() *cobra.Command {
 				// No preset URLs — user fills in manually via config set
 			case "staging":
 				p.BaseURL = "https://fxapi.staging.bifu.co"
+				p.WebURL = "https://staging.bifu.co"
 				p.WebSocketURL = "wss://fxapi.staging.bifu.co"
 				p.WSMarket = "wss://quote.staging.bifu.co/api/v1/public/ws"
 				p.WSPrivate = "wss://contract.staging.bifu.co/api/v1/private/contract/ws"
@@ -244,6 +249,7 @@ func newInitCmd() *cobra.Command {
 				p.Pushgw.TradfiWS = "wss://fxapi.staging.bifu.co/tradfi/ws"
 			case "prod":
 				p.BaseURL = "https://fxapi.bifu.co"
+				p.WebURL = "https://bifu.co"
 				p.WebSocketURL = "wss://fxapi.bifu.co"
 				p.WSMarket = "wss://quote.bifu.co/api/v1/public/ws"
 				p.WSPrivate = "wss://contract.bifu.live/api/v1/private/contract/ws"
@@ -253,6 +259,7 @@ func newInitCmd() *cobra.Command {
 				p.Pushgw.TradfiWS = "wss://fxapi.bifu.co/tradfi/ws"
 			default: // dev (and explicit "dev")
 				p.BaseURL = "https://fxapi.bifu.dev"
+				p.WebURL = "https://bifu.dev"
 				p.WebSocketURL = "wss://fxapi.bifu.dev"
 				p.WSMarket = "wss://quote.bifu.dev/api/v1/public/ws"
 				p.WSPrivate = "wss://contract.bifu.dev/api/v1/private/contract/ws"

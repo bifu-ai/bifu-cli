@@ -18,7 +18,7 @@ const (
 )
 
 // CLIConfig is the root configuration for bifu-cli.
-// Supports multiple named profiles (like AWS CLI profiles).
+// Supports multiple named profiles (like Solana CLI profiles).
 type CLIConfig struct {
 	// Active profile name
 	ActiveProfile string `yaml:"active_profile"`
@@ -32,6 +32,7 @@ type Profile struct {
 
 	// ── Endpoints ────────────────────────────────────────────────────────────
 	BaseURL      string `yaml:"base_url"`      // HTTP API base (e.g. https://api.bifu.dev)
+	WebURL       string `yaml:"web_url"`       // Web app login page (e.g. https://app.bifu.dev), used by `auth login --web`
 	WebSocketURL string `yaml:"websocket_url"` // WS base (e.g. wss://api.bifu.dev)
 	GrpcSpot     string `yaml:"grpc_spot"`     // Spot gRPC addr (host:port)
 	GrpcContract string `yaml:"grpc_contract"` // Contract gRPC addr (host:port)

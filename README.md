@@ -75,11 +75,11 @@ bifu-cli config init --profile myprod --env prod
 
 **环境预设地址**
 
-| 环境 | Base URL | Market WS | Private WS (contract) | Private WS (spot) |
-|------|----------|-----------|-----------------------|-------------------|
-| `dev` | `https://fxapi.bifu.dev` | `wss://quote.bifu.dev` | `wss://contract.bifu.dev` | `wss://spot.bifu.dev` |
-| `staging` | `https://fxapi.staging.bifu.co` | `wss://quote.staging.bifu.co` | `wss://contract.staging.bifu.co` | `wss://spot.staging.bifu.co` |
-| `prod` | `https://fxapi.bifu.co` | `wss://quote.bifu.co` | `wss://contract.bifu.live` | `wss://spot.bifu.live` |
+| 环境 | Base URL | Web URL | Market WS | Private WS (contract) | Private WS (spot) |
+|------|----------|---------|-----------|-----------------------|-------------------|
+| `dev` | `https://fxapi.bifu.dev` | `https://bifu.dev` | `wss://quote.bifu.dev` | `wss://contract.bifu.dev` | `wss://spot.bifu.dev` |
+| `staging` | `https://fxapi.staging.bifu.co` | `https://staging.bifu.co` | `wss://quote.staging.bifu.co` | `wss://contract.staging.bifu.co` | `wss://spot.staging.bifu.co` |
+| `prod` | `https://fxapi.bifu.co` | `https://bifu.co` | `wss://quote.bifu.co` | `wss://contract.bifu.live` | `wss://spot.bifu.live` |
 
 ### 修改配置
 
@@ -137,12 +137,41 @@ bifu-cli --profile dev auth login --username user@example.com --password 'MyPass
 ```
 
 **登录流程：**
+
 1. 输入邮箱和密码（密码不回显）
 2. 服务端发送验证码到邮箱
 3. 输入收到的验证码
 4. Cookie 自动保存到 profile 的 `auth_cookie` 字段（有效期 30 天）
 
 > **注意**：Dev 环境验证码固定为 `123456`。
+
+### auth login --web — 浏览器登录
+
+类似 `gh auth login`:CLI 自动打开网页登录页,你在浏览器里正常登录后,把 `user_auth_name`
+Cookie 贴回终端即可(免在终端输入密码/验证码)。
+
+`config init` 已为各环境预置网页地址(dev=`https://bifu.dev`、prod=`https://bifu.co`),
+所以 `--web` 开箱即用,无需额外配置。
+
+```bash
+# 浏览器登录（用 profile 预置的 web_url）
+bifu-cli --profile dev auth login --web
+
+# 临时指定登录页 URL（覆盖 web_url）
+bifu-cli auth login --web --url https://bifu.dev
+
+# 如需为自定义 profile 单独设置网页地址
+bifu-cli config set --web-url https://bifu.dev
+```
+
+**流程：**
+
+1. CLI 打开网页登录页（用 `--url`，否则用 profile 的 `web_url`）
+2. 你在浏览器正常登录
+3. 从 DevTools → Application → Cookies 复制 `user_auth_name` 的值
+4. 粘贴回终端,自动保存到 profile
+
+> 粘贴时可直接贴 `user_auth_name=xxx; ...` 整段 Cookie，CLI 会自动提取出真实值。
 
 ### auth cookie — Cookie 工具（仅离线调试）
 
