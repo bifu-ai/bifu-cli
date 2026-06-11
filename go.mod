@@ -4,7 +4,7 @@ go 1.25.5
 
 require (
 	github.com/briandowns/spinner v1.23.2
-	github.com/fatih/color v1.18.0
+	github.com/fatih/color v1.19.0
 	github.com/gorilla/websocket v1.5.1
 	github.com/jedib0t/go-pretty/v6 v6.8.1
 	github.com/mark3labs/mcp-go v0.54.1
