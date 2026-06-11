@@ -20,7 +20,7 @@ func NewConfigCmd() *cobra.Command {
 		Short: "Manage bifu-cli configuration and profiles",
 		Long: `Manage bifu-cli configuration stored at ~/.bifu-cli/config.yaml.
 
-Supports multiple named profiles (like AWS CLI profiles).
+Supports multiple named profiles (like Solana CLI profiles).
 Each profile stores endpoints, auth credentials, and connection settings.`,
 	}
 

@@ -18,7 +18,16 @@ type WSMessage struct {
 	Raw []byte
 }
 
-// WSClient manages a single WebSocket connection with auto-ping and reconnect.
+// Keepalive tuning: the client sends a ping every pingPeriod and expects any
+// frame (pong or data) within pongWait, otherwise the read deadline fires and
+// the connection is torn down. Reconnect is intentionally NOT handled here —
+// the caller decides whether to redial.
+const (
+	pingPeriod = 20 * time.Second
+	pongWait   = 60 * time.Second
+)
+
+// WSClient manages a single WebSocket connection with an auto-ping keepalive.
 type WSClient struct {
 	mu        sync.Mutex
 	conn      *websocket.Conn
@@ -90,11 +99,45 @@ func (c *WSClient) Connect() error {
 	if err != nil {
 		return fmt.Errorf("ws dial %s: %w", c.url, err)
 	}
+
+	// Keepalive: bound how long a silent connection may stay open, and extend
+	// the deadline every time the peer answers a ping.
+	_ = conn.SetReadDeadline(time.Now().Add(pongWait))
+	conn.SetPongHandler(func(string) error {
+		return conn.SetReadDeadline(time.Now().Add(pongWait))
+	})
+
 	c.conn = conn
 	c.connected = true
 
 	go c.readLoop()
+	go c.pingLoop()
 	return nil
+}
+
+// pingLoop sends a periodic ping so idle connections are not dropped by the
+// peer or an intermediary, and so a dead peer trips the read deadline.
+func (c *WSClient) pingLoop() {
+	ticker := time.NewTicker(pingPeriod)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-c.done:
+			return
+		case <-ticker.C:
+			c.mu.Lock()
+			conn := c.conn
+			c.mu.Unlock()
+			if conn == nil {
+				return
+			}
+			// WriteControl is safe to call concurrently with other writes.
+			if err := conn.WriteControl(websocket.PingMessage, nil,
+				time.Now().Add(10*time.Second)); err != nil {
+				return
+			}
+		}
+	}
 }
 
 // Subscribe sends subscription messages for the given channels.
@@ -168,6 +211,8 @@ func (c *WSClient) readLoop() {
 		if err != nil {
 			return
 		}
+		// Any inbound frame proves the connection is live — extend the deadline.
+		_ = c.conn.SetReadDeadline(time.Now().Add(pongWait))
 		select {
 		case c.messages <- msg:
 		default:

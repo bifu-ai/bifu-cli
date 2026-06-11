@@ -18,7 +18,7 @@ make build          # 输出 bin/bifu-cli
 make install
 ```
 
-**环境要求**: Go 1.24+
+**环境要求**: Go 1.25+
 
 ---
 
@@ -58,7 +58,7 @@ bifu-cli forex order create --login-id 90390034 --symbol EURUSD --type buy --vol
 
 ## config — 配置管理
 
-配置文件路径：`~/.bifu-cli/config.yaml`，支持多 Profile，类似 AWS CLI。
+配置文件路径：`~/.bifu-cli/config.yaml`，支持多 Profile，类似 Solana CLI。
 
 ### 初始化 Profile
 
@@ -144,31 +144,23 @@ bifu-cli --profile dev auth login --username user@example.com --password 'MyPass
 
 > **注意**：Dev 环境验证码固定为 `123456`。
 
-### auth cookie — Cookie 工具
+### auth cookie — Cookie 工具（仅离线调试）
 
-> 适用于已知 Cookie 加密 key 的环境（dev / custom）。生产环境推荐使用 `auth login`。
+> ⚠️ **已废弃**：后端现在会对 `user_auth_name` 做服务端会话校验，**本地生成的 Cookie
+> 无法通过任何认证接口**。请统一使用上面的 `bifu-cli auth login` 获取有效会话 Cookie。
+> 以下命令仅保留用于离线查看/调试 Cookie 格式。
 
-#### 生成并保存 Cookie（custom 环境）
+#### `set` / `encode`（已废弃，本地生成不再可用于鉴权）
 
 ```bash
-# 生成 cookie 并保存到当前激活 profile（env 自动从 profile 名推断）
+# 生成并保存到 profile —— 已废弃，运行时会打印警告
 bifu-cli auth cookie set 620640738
 
-# 指定 env
-bifu-cli auth cookie set 620640738 --env dev
-bifu-cli auth cookie set 620640738 --env staging
-
-# 针对特定 profile 操作
-bifu-cli --profile staging auth cookie set 620640738 --env staging
-```
-
-#### 仅生成（不保存）
-
-```bash
+# 仅生成打印（不保存）
 bifu-cli auth cookie encode 620640738 --env dev
 ```
 
-#### 解码 Cookie
+#### 解码 Cookie（仍可用，便于排查）
 
 ```bash
 bifu-cli auth cookie decode "yHjCFUQ2jFBQ..."
@@ -417,8 +409,6 @@ bifu-cli payment unified-transfer --from SAVING --to FOREX --amount 100 --curren
 ### 订单类型
 
 > MT5 用小写类型名（buy/sell/buyLimit…）。TradFi 也可直接用 `--order-type Market|Limit|Stop|StopLimit` + `--side Buy|Sell`（不传则由 `--type` 自动推导）。
-
-| 类型 | 说明 | 成交条件 |
 
 | 类型 | 说明 | 成交条件 |
 |------|------|----------|

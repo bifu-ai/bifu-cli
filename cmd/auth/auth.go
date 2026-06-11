@@ -3,6 +3,7 @@ package auth
 
 import (
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 
@@ -46,11 +47,15 @@ func newCookieEncodeCmd() *cobra.Command {
 	var env string
 	cmd := &cobra.Command{
 		Use:   "encode <uid>",
-		Short: "Generate a user_auth_name cookie for a given UID",
+		Short: "Generate a user_auth_name cookie for a given UID (offline/debug)",
 		Long: `Generate and print the user_auth_name cookie value for the specified UID.
 
 The cookie uses AES-CBC encryption (same key as the bifu backend).
-Use ` + "`" + `auth cookie set` + "`" + ` to generate AND save to your active profile.`,
+
+NOTE: the backend now validates cookies against a live server-side session, so
+a locally generated cookie will NOT authenticate real API requests. Use
+` + "`bifu-cli auth login`" + ` to obtain a working session cookie. This command remains
+useful for inspecting the cookie format offline.`,
 		Example: `  bifu-cli auth cookie encode 109150807
   bifu-cli auth cookie encode 109150807 --env dev`,
 		Args: cobra.ExactArgs(1),
@@ -96,9 +101,14 @@ func newCookieSetCmd(load LoadFn) *cobra.Command {
 	var env string
 	cmd := &cobra.Command{
 		Use:   "set <uid>",
-		Short: "Generate a cookie and save it to the active profile",
-		Long: `Generate a user_auth_name cookie for the given UID and persist it in the
-active profile's auth_cookie field.
+		Short: "[DEPRECATED] Generate a cookie and save it to the active profile",
+		Long: `[DEPRECATED — use ` + "`bifu-cli auth login`" + `] Generate a user_auth_name cookie
+for the given UID and persist it in the active profile's auth_cookie field.
+
+The backend now validates the cookie against a live server-side session, so a
+locally generated cookie is rejected on every authenticated request. Prefer
+` + "`bifu-cli auth login`" + `, which performs a real login and saves a valid session
+cookie. This command is kept only for offline/debugging use.
 
 The --env flag defaults to the profile name (dev/staging/prod map directly,
 anything else defaults to "dev").`,
@@ -111,6 +121,9 @@ anything else defaults to "dev").`,
 			if err != nil {
 				return fmt.Errorf("invalid uid %q: %w", args[0], err)
 			}
+
+			fmt.Fprintln(os.Stderr, "⚠ DEPRECATED: locally generated cookies no longer pass the backend "+
+				"session check.\n  Run `bifu-cli auth login` to obtain a working session cookie.")
 
 			// Load config
 			cfg, err := clifconfig.Load()
