@@ -21,7 +21,8 @@ import (
 	"bifu-cli/internal/output"
 )
 
-const version = "1.0.0"
+// version is set at build time via -ldflags "-X bifu-cli/cmd.version=...".
+var version = "dev"
 
 var (
 	globalProfile string

@@ -9,16 +9,24 @@ BifuFX 交易平台命令行工具，支持现货、合约、外汇(MT5/Tradefi)
 ## 安装
 
 ```bash
-# 从源码编译
-git clone <repo>
-cd bifu-cli
-make build          # 输出 bin/bifu-cli
+# 一键脚本(自动识别 OS/架构,从 GitHub Release 下载)
+curl -fsSL https://cli.bifu.dev/install.sh | bash
 
-# 或安装到 $GOPATH/bin
-make install
+# Homebrew
+brew install decodeex/tap/bifu-cli
+
+# npm
+npm i -g @decodeex/bifu-cli
 ```
 
-**环境要求**: Go 1.25+
+从源码编译(需要 Go 1.25+):
+
+```bash
+git clone https://github.com/decodeex/bifu-cli.git
+cd bifu-cli
+make build          # 输出 bin/bifu-cli
+make install        # 或安装到 $GOPATH/bin
+```
 
 ---
 
@@ -730,3 +738,29 @@ make clean      # 清理编译产物
 make test       # 运行单元测试
 make lint       # 静态分析（需安装 staticcheck）
 ```
+
+---
+
+## 发布 (CI/CD)
+
+一次打 tag,三个渠道同时发布(GoReleaser + GitHub Actions):
+
+```bash
+git tag v1.2.0 && git push origin v1.2.0
+```
+
+- **`.github/workflows/release.yml`**:GoReleaser 跨平台编译(darwin/linux/windows × amd64/arm64)→ 建 GitHub Release(含 checksums)→ 推 Homebrew formula 到 `decodeex/homebrew-tap` → 发 `@decodeex/bifu-cli` 到 npm。
+- **`.github/workflows/ci.yml`**:push/PR 跑 build + vet + test + `goreleaser check` + staticcheck。
+- **`.github/workflows/pages.yml`**:把 `install.sh` 同步进 `docs/` 并部署到 GitHub Pages(`cli.bifu.dev`)。
+
+### 一次性准备
+
+| 事项 | 说明 |
+|------|------|
+| Secret `HOMEBREW_TAP_GITHUB_TOKEN` | 对 `decodeex/homebrew-tap` 有 `repo` 权限的 PAT(GoReleaser 推 formula 用) |
+| Secret `NPM_TOKEN` | npm `@decodeex` org 的自动化发布 token |
+| 仓库 `decodeex/homebrew-tap` | 新建空仓库(GoReleaser 首次发布会写入 `Formula/bifu-cli.rb`) |
+| GitHub Pages | 仓库 Settings → Pages → Source 选 **GitHub Actions** |
+| DNS | 给 `cli.bifu.dev` 加 CNAME 记录指向 `decodeex.github.io`(`docs/CNAME` 已声明该域名) |
+
+> 本地试跑(不发布):`goreleaser release --snapshot --clean`。

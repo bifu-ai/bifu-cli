@@ -1,7 +1,7 @@
 BINARY     := bifu-cli
 BINARY_DIR := bin
 VERSION    := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
-LDFLAGS    := -ldflags "-X main.version=$(VERSION) -s -w"
+LDFLAGS    := -ldflags "-X bifu-cli/cmd.version=$(VERSION) -s -w"
 
 .PHONY: all build install clean tidy lint test help
 

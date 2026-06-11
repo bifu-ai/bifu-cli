@@ -1,0 +1,18 @@
+name: Feature request
+description: Suggest an improvement to bifu-cli
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / use case
+      description: What are you trying to do that bifu-cli does not support well?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Command shape, flags, output you'd expect.
+    validations:
+      required: true

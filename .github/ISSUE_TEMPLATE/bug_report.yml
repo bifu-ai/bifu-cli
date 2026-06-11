@@ -1,0 +1,40 @@
+name: Bug report
+description: Something in bifu-cli is broken
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What did you run and what went wrong?
+      placeholder: |
+        $ bifu-cli spot balance
+        ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: bifu-cli version
+      description: Output of `bifu-cli version`
+    validations:
+      required: true
+  - type: input
+    id: env
+    attributes:
+      label: OS / install method
+      placeholder: "macOS arm64, installed via brew"
+    validations:
+      required: true
+  - type: textarea
+    id: verbose
+    attributes:
+      label: Verbose output (optional)
+      description: Re-run with `-v` and paste relevant logs (redact cookies/secrets).
+      render: shell

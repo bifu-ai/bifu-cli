@@ -1,0 +1,78 @@
+# GoReleaser config — builds cross-platform binaries, publishes a GitHub
+# Release, and updates the Homebrew tap. See: https://goreleaser.com
+version: 2
+
+project_name: bifu-cli
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: bifu-cli
+    main: .
+    binary: bifu-cli
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X bifu-cli/cmd.version={{ .Version }}
+
+archives:
+  - id: bifu-cli
+    # Stable, predictable names so install.sh and the npm wrapper can build the
+    # download URL: bifu-cli_<os>_<arch>.tar.gz (zip on windows).
+    name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+
+checksum:
+  name_template: "checksums.txt"
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+      - "merge conflict"
+      - Merge pull request
+      - Merge branch
+
+brews:
+  - name: bifu-cli
+    repository:
+      owner: decodeex
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    directory: Formula
+    homepage: "https://cli.bifu.dev"
+    description: "BifuFX trading platform CLI — spot, contract, forex, WebSocket, MCP"
+    license: "MIT"
+    test: |
+      system "#{bin}/bifu-cli", "version"
+    install: |
+      bin.install "bifu-cli"
+
+release:
+  github:
+    owner: decodeex
+    name: bifu-cli
+  draft: false
+  prerelease: auto
+  footer: |
+    ---
+    Install: `curl -fsSL https://cli.bifu.dev/install.sh | bash`
+    Homebrew: `brew install decodeex/tap/bifu-cli`
+    npm: `npm i -g @decodeex/bifu-cli`
