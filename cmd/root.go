@@ -14,7 +14,9 @@ import (
 	"bifu-cli/cmd/forex"
 	"bifu-cli/cmd/payment"
 	"bifu-cli/cmd/spot"
+	"bifu-cli/cmd/mcp"
 	"bifu-cli/cmd/ws"
+	"bifu-cli/internal/client"
 	"bifu-cli/internal/clifconfig"
 	"bifu-cli/internal/output"
 )
@@ -25,6 +27,7 @@ var (
 	globalProfile string
 	globalOutput  string
 	globalVerbose bool
+	globalYes     bool
 )
 
 var rootCmd = &cobra.Command{
@@ -38,12 +41,17 @@ var rootCmd = &cobra.Command{
 		"  bifu-cli payment balance\n" +
 		"  bifu-cli forex order create --login-id 90390034 --symbol EURUSD --type buy --volume 0.01\n" +
 		"  bifu-cli ws market --channels ticker.BTCUSDT",
-	SilenceUsage: true,
+	SilenceUsage:  true,
+	SilenceErrors: true,
 }
 
-// Execute runs the root command.
+// Execute runs the root command, printing any error as a red ✗ line.
 func Execute() error {
-	return rootCmd.Execute()
+	if err := rootCmd.Execute(); err != nil {
+		fmt.Fprintln(os.Stderr, output.ErrText("✗ ")+err.Error())
+		return err
+	}
+	return nil
 }
 
 // LoadFn is the shared context-loader signature used by every subcommand.
@@ -56,6 +64,12 @@ func init() {
 		"Output format: table | json | plain")
 	rootCmd.PersistentFlags().BoolVarP(&globalVerbose, "verbose", "v", false,
 		"Enable verbose/debug output")
+	rootCmd.PersistentFlags().BoolVarP(&globalYes, "yes", "y", false,
+		"Skip confirmation prompts (assume yes)")
+
+	_ = rootCmd.RegisterFlagCompletionFunc("output", func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
+		return []string{"table", "json", "plain"}, cobra.ShellCompDirectiveNoFileComp
+	})
 
 	load := loadCtx
 
@@ -66,6 +80,7 @@ func init() {
 	rootCmd.AddCommand(payment.NewPaymentCmd(load))
 	rootCmd.AddCommand(forex.NewForexCmd(load))
 	rootCmd.AddCommand(ws.NewWSCmd(load))
+	rootCmd.AddCommand(mcp.NewMCPCmd(load))
 	rootCmd.AddCommand(newVersionCmd())
 }
 
@@ -84,6 +99,9 @@ func loadCtx() (*clifconfig.Profile, *output.Printer, error) {
 		}
 	}
 	// else: use cfg.ActiveProfile from config file (set via `config use`)
+
+	// Spinners on stderr would interleave badly with machine-readable JSON.
+	client.ShowSpinner = globalOutput != string(output.FormatJSON)
 
 	profile := cfg.Active()
 	printer := output.NewPrinter(output.Format(globalOutput), globalVerbose)

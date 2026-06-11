@@ -112,7 +112,17 @@ func newOrderCreate(load LoadFn) *cobra.Command {
 	_ = cmd.MarkFlagRequired("symbol")
 	_ = cmd.MarkFlagRequired("side")
 	_ = cmd.MarkFlagRequired("size")
+	_ = cmd.RegisterFlagCompletionFunc("side", fixedComp("BUY", "SELL"))
+	_ = cmd.RegisterFlagCompletionFunc("type", fixedComp("MARKET", "LIMIT", "STOP_LIMIT"))
+	_ = cmd.RegisterFlagCompletionFunc("tif", fixedComp("GOOD_TIL_CANCEL", "IMMEDIATE_OR_CANCEL", "FILL_OR_KILL"))
 	return cmd
+}
+
+// fixedComp returns a flag completion function offering a fixed set of values.
+func fixedComp(vals ...string) func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
+	return func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
+		return vals, cobra.ShellCompDirectiveNoFileComp
+	}
 }
 
 func newOrderCancel(load LoadFn) *cobra.Command {
@@ -127,6 +137,14 @@ func newOrderCancel(load LoadFn) *cobra.Command {
 				return err
 			}
 			if all {
+				target := "all open spot orders"
+				if symbol != "" {
+					target += " for symbol " + symbol
+				}
+				if yes, _ := cmd.Root().PersistentFlags().GetBool("yes"); !yes && !pr.Confirm("Cancel "+target+"?") {
+					pr.Line("Aborted.")
+					return nil
+				}
 				if err := c.CancelAllOrders(symbol); err != nil {
 					return err
 				}

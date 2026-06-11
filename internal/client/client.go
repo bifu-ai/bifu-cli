@@ -13,8 +13,29 @@ import (
 	"sync"
 	"time"
 
+	"github.com/briandowns/spinner"
+	"golang.org/x/term"
+
 	"bifu-cli/internal/clifconfig"
 )
+
+// ShowSpinner controls whether a progress spinner is shown on stderr during
+// HTTP requests. It is disabled for JSON output (set from the root command) and
+// auto-suppressed for non-terminals / verbose mode.
+var ShowSpinner = true
+
+// startSpinner shows a spinner on stderr and returns a stop function. It is a
+// no-op when spinners are disabled, output is not a terminal, or verbose mode
+// is on (verbose prints its own request logs).
+func startSpinner(label string, verbose bool) func() {
+	if !ShowSpinner || verbose || !term.IsTerminal(int(os.Stderr.Fd())) {
+		return func() {}
+	}
+	s := spinner.New(spinner.CharSets[14], 80*time.Millisecond, spinner.WithWriter(os.Stderr))
+	s.Suffix = " " + label
+	s.Start()
+	return s.Stop
+}
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
@@ -157,14 +178,17 @@ func (c *HTTPClient) do(method, rawURL string, params map[string]string, body in
 		}
 	}
 
+	stop := startSpinner(method+" "+u.Path, c.Verbose)
 	start := time.Now()
 	resp, err := c.http.Do(req)
 	if err != nil {
+		stop()
 		return nil, fmt.Errorf("request: %w", err)
 	}
 	defer resp.Body.Close()
 
 	data, err := io.ReadAll(resp.Body)
+	stop()
 	if err != nil {
 		return nil, fmt.Errorf("read body: %w", err)
 	}

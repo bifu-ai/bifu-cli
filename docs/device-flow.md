@@ -1,26 +1,31 @@
 # Device Login (`bifu-cli auth login --device`)
 
-A `gh auth login`-style flow: the CLI opens a browser approval page, the user
-(already logged in on the web) approves, and the CLI polls until it receives the
-session cookie. No password is typed in the terminal.
+A `gh auth login`-style flow: the CLI prints a QR code in the terminal, the user
+scans it with the already-logged-in **Bifu app** to approve, and the CLI polls
+until it receives the session cookie. No password is typed in the terminal.
 
 This **reuses the backend's existing scan-to-login (QR) endpoints** — there are
 no dedicated device endpoints. The CLI side is implemented in
 [cmd/auth/login.go](../cmd/auth/login.go) (`runDeviceLogin`).
+
+> The `/x/{issueId}` link is an **app deep-link encoded in the QR**, not a
+> desktop web page — `https://bifu.dev/x/...` / `https://bifu.co/x/...` return
+> 404 in a browser. Approval happens in the Bifu app that scans (or opens) it.
 
 ---
 
 ## Sequence
 
 ```
-CLI                              Backend                    Browser (logged-in user)
+CLI                              Backend                    Bifu app (logged in)
  │ GET  /user/login/qr_code_get    │                              │
  │ ──────────────────────────────► │  issueId + url               │
  │ ◄──────────────────────────────                                │
- │ open {web_url}/x/{issueId} ────────────────────────────────────►│
- │                                 │      page: qr_code_scan       │
+ │ render QR of {web_url}/x/{issueId} in the terminal             │
+ │                          scan ─────────────────────────────────►│
+ │                                 │      app: qr_code_scan        │
  │                                 │ ◄──────────────────────────── │
- │                                 │      page: qr_code_confirm    │
+ │                                 │      app: qr_code_confirm     │
  │                                 │ ◄──────────────────────────── │ (is_confirm=1)
  │ POST /user/login/qr_code_check  │                              │
  │ ──────────────────────────────► │  (poll every 3s)             │
@@ -30,10 +35,10 @@ CLI                              Backend                    Browser (logged-in u
  │ save cookie to profile          │                              │
 ```
 
-The CLI opens `{profile.web_url}/x/{issueId}` (e.g. `https://bifu.dev/x/...`),
+The QR encodes `{profile.web_url}/x/{issueId}` (e.g. `https://bifu.dev/x/...`),
 not the `url` returned by the backend — `qr_code_get` returns a hard-coded prod
-URL, so the CLI rewrites the host using the profile's `web_url` to hit the right
-environment.
+URL, so the CLI rewrites the host using the profile's `web_url` so the scan
+targets the right environment.
 
 ---
 
@@ -59,7 +64,7 @@ Response — state is in `result.issueStatus`:
 |---------------|---------------|
 | `pending` / `processing` | keep polling |
 | `success` | save `result.cookieStr` (JSON `http.Cookie`, the CLI extracts `.Value`) + `result.user.userId`, stop |
-| `refused` | error: rejected in browser |
+| `refused` | error: rejected in the app |
 | `expired` | error: code expired |
 
 Success example:
@@ -77,9 +82,9 @@ Success example:
 
 ---
 
-## Browser approval page — `/x/{issueId}` (frontend)
+## App approval (scanning `/x/{issueId}`)
 
-A logged-in user lands on `/x/{issueId}` and approves. The page drives the
+When the logged-in Bifu app scans (or opens) `/x/{issueId}`, it drives the
 backend's two-step confirm:
 
 1. `POST /user/login/qr_code_scan` `{ "issueId": "<issueId>" }` → moves the issue
@@ -88,4 +93,8 @@ backend's two-step confirm:
    (requires the user's session) → moves it to `success:{userId}`.
 
 `is_confirm = "0"` rejects (→ `refused`). The issue TTL is short (60s, reset on
-each step), so the page should call scan immediately on load.
+each step), so the app should call scan immediately.
+
+> Verified end-to-end on dev: CLI renders the QR, the two confirm calls (made
+> with a logged-in session) flip it to `success`, and the CLI receives a working
+> `user_auth_name` cookie.

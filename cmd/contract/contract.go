@@ -137,6 +137,14 @@ func newOrderCreate(load LoadFn) *cobra.Command {
 	_ = cmd.MarkFlagRequired("side")
 	_ = cmd.MarkFlagRequired("order-side")
 	_ = cmd.MarkFlagRequired("size")
+	fixed := func(vals ...string) func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
+		return func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
+			return vals, cobra.ShellCompDirectiveNoFileComp
+		}
+	}
+	_ = cmd.RegisterFlagCompletionFunc("side", fixed("LONG", "SHORT"))
+	_ = cmd.RegisterFlagCompletionFunc("order-side", fixed("BUY", "SELL"))
+	_ = cmd.RegisterFlagCompletionFunc("type", fixed("MARKET", "LIMIT", "STOP_LIMIT"))
 	return cmd
 }
 
@@ -152,6 +160,14 @@ func newOrderCancel(load LoadFn) *cobra.Command {
 				return err
 			}
 			if all {
+				target := "all open contract orders"
+				if contractID != "" {
+					target += " for contract " + contractID
+				}
+				if yes, _ := cmd.Root().PersistentFlags().GetBool("yes"); !yes && !pr.Confirm("Cancel "+target+"?") {
+					pr.Line("Aborted.")
+					return nil
+				}
 				if err := c.CancelAllOrders(contractID); err != nil {
 					return err
 				}

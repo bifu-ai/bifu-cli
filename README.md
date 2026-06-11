@@ -1,6 +1,6 @@
 # bifu-cli
 
-BifuFX 交易平台命令行工具，支持现货、合约、外汇(MT5)交易，以及 WebSocket 实时行情订阅。
+BifuFX 交易平台命令行工具，支持现货、合约、外汇(MT5/Tradefi)交易，以及 WebSocket 实时行情订阅。
 
 设计灵感来自 [Solana CLI](https://docs.solanalabs.com/cli)，采用多 Profile 配置管理，可在 custom/dev/staging/prod 环境之间快速切换。
 
@@ -53,6 +53,10 @@ bifu-cli forex order create --login-id 90390034 --symbol EURUSD --type buy --vol
 | `--profile` | `-p` | `default` | 使用的配置 Profile |
 | `--output` | `-o` | `table` | 输出格式：`table` / `json` / `plain` |
 | `--verbose` | `-v` | `false` | 开启调试输出 |
+| `--yes` | `-y` | `false` | 跳过危险操作的二次确认（撤销全部挂单等） |
+
+> 表格输出会自动右对齐数字列、并按语义着色（盈亏红绿、BUY/LONG 绿、SELL/SHORT 红、订单状态）；
+> 管道/非终端输出自动去色,`-o json` 保持纯净。网络请求时终端会显示加载动画(`-o json` / 非终端自动关闭)。
 
 ---
 
@@ -635,6 +639,46 @@ bifu-cli ws pushgw --market-watch --login-ids 90390034
 > **MT5 vs TradFi 推送**：MT5 pushgw 的 orderEvent 只反映 MT5 账户；**tradfi 账户的实时行情/订单推送必须用 `--tradfi`（/tradfi/ws）**——该端点提供真实 Fortex 行情和 tradfi 账户的 balance/equity/margin/positions。
 
 > 按 `Ctrl+C` 断开连接。
+
+---
+
+## mcp — AI Agent 接入 (Model Context Protocol)
+
+把 bifu-cli 的交易能力暴露成 MCP 工具,让 AI 助手(Claude Desktop、Cursor、VS Code 等)
+直接查询余额/持仓/挂单并下单/撤单(用当前 profile 的会话)。
+
+```bash
+# 运行 stdio MCP server(一般由客户端拉起,不用手动跑)
+bifu-cli --profile dev mcp serve
+
+# 一键注册到客户端(写入其 MCP 配置)
+bifu-cli --profile dev mcp setup --client cursor
+bifu-cli --profile dev mcp setup --client claude
+bifu-cli mcp setup            # 不传 --client 时打印配置片段供手动添加
+```
+
+暴露的工具:`get_spot_balance`、`get_payment_balance`、`get_contract_account`、
+`list_contract_positions`、`list_spot_open_orders`、`list_contract_open_orders`、
+`list_forex_accounts`、`create_spot_order`、`create_contract_order`、
+`cancel_spot_order`、`cancel_contract_order`。
+
+> `mcp setup` 会把可执行文件路径 + `mcp serve --profile <当前 profile>` 合并进客户端配置
+> (Claude Desktop / Cursor `~/.cursor/mcp.json` / VS Code),保留已有条目,重启客户端即可生效。
+
+---
+
+## 命令补全 (shell completion)
+
+```bash
+# zsh(写入 fpath 任一目录)
+bifu-cli completion zsh > "${fpath[1]}/_bifu-cli"
+
+# bash / fish / powershell 同理
+bifu-cli completion bash > /usr/local/etc/bash_completion.d/bifu-cli
+```
+
+`--output`、`spot/contract order create` 的 `--side`/`--order-side`/`--type`/`--tif`
+等枚举 flag 支持 Tab 补全候选值。
 
 ---
 
