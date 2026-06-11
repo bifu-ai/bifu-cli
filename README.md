@@ -2,7 +2,7 @@
 
 BifuFX 交易平台命令行工具，支持现货、合约、外汇(MT5/Tradefi)交易，以及 WebSocket 实时行情订阅。
 
-采用多 Profile 配置管理，可在 custom/dev/staging/prod 环境之间快速切换。
+命令与配置风格对齐主流交易所 CLI（如 OKX）：多 Profile 管理，可在 custom/dev/staging/prod 环境之间快速切换。
 
 ---
 
