@@ -10,7 +10,7 @@ require (
 	github.com/mark3labs/mcp-go v0.54.1
 	github.com/mdp/qrterminal/v3 v3.2.1
 	github.com/spf13/cobra v1.10.1
-	golang.org/x/term v0.42.0
+	golang.org/x/term v0.44.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
@@ -27,7 +27,7 @@ require (
 	github.com/spf13/pflag v1.0.9 // indirect
 	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
 	golang.org/x/net v0.17.0 // indirect
-	golang.org/x/sys v0.43.0 // indirect
+	golang.org/x/sys v0.46.0 // indirect
 	golang.org/x/text v0.22.0 // indirect
 	rsc.io/qr v0.2.0 // indirect
 )
