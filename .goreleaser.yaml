@@ -48,20 +48,25 @@ changelog:
       - Merge pull request
       - Merge branch
 
-brews:
+homebrew_casks:
   - name: bifu-cli
+    binaries:
+      - bifu-cli
     repository:
       owner: decodeex
       name: homebrew-tap
+      branch: main
       token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
-    directory: Formula
+    directory: Casks
     homepage: "https://cli.bifu.dev"
     description: "BifuFX trading platform CLI — spot, contract, forex, WebSocket, MCP"
-    license: "MIT"
-    test: |
-      system "#{bin}/bifu-cli", "version"
-    install: |
-      bin.install "bifu-cli"
+    # Unsigned binary: strip the quarantine bit so macOS Gatekeeper won't block it.
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/bifu-cli"]
+          end
 
 release:
   github:
