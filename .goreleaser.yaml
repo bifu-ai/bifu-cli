@@ -27,11 +27,9 @@ builds:
 archives:
   - id: bifu-cli
     # Stable, predictable names so install.sh and the npm wrapper can build the
-    # download URL: bifu-cli_<os>_<arch>.tar.gz (zip on windows).
+    # download URL: bifu-cli_<os>_<arch>.tar.gz (tar.gz on all platforms;
+    # Windows 10+ ships bsdtar which extracts it).
     name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
-    format_overrides:
-      - goos: windows
-        formats: [zip]
 
 checksum:
   name_template: "checksums.txt"

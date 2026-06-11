@@ -23,8 +23,7 @@ function fail(msg) {
 if (!OS || !ARCH) fail("unsupported platform " + process.platform + "/" + process.arch);
 if (!pkg.version || pkg.version === "0.0.0") fail("no release version set");
 
-const ext = OS === "windows" ? "zip" : "tar.gz";
-const asset = `bifu-cli_${OS}_${ARCH}.${ext}`;
+const asset = `bifu-cli_${OS}_${ARCH}.tar.gz`;
 const url = `https://github.com/${REPO}/releases/download/v${pkg.version}/${asset}`;
 const binDir = path.join(__dirname, "bin");
 const tmp = path.join(os.tmpdir(), asset);
