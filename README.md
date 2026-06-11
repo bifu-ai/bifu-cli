@@ -764,3 +764,9 @@ git tag v1.2.0 && git push origin v1.2.0
 | DNS | 给 `cli.bifu.dev` 加 CNAME 记录指向 `decodeex.github.io`(`docs/CNAME` 已声明该域名) |
 
 > 本地试跑(不发布):`goreleaser release --snapshot --clean`。
+
+---
+
+## 参考
+
+- 命令与配置风格参考 [OKX agent-trade-kit](https://github.com/okx/agent-trade-kit)
