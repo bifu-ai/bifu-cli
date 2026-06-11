@@ -18,7 +18,7 @@ const (
 )
 
 // CLIConfig is the root configuration for bifu-cli.
-// Supports multiple named profiles (like Solana CLI profiles).
+// Supports multiple named profiles (like OKX CLI profiles).
 type CLIConfig struct {
 	// Active profile name
 	ActiveProfile string `yaml:"active_profile"`

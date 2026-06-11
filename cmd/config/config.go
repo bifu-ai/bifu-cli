@@ -1,5 +1,5 @@
 // Package config implements the `bifu-cli config` command group.
-// Analogous to `solana config` / `near config`.
+// Analogous to `okx config`.
 package config
 
 import (
@@ -20,7 +20,7 @@ func NewConfigCmd() *cobra.Command {
 		Short: "Manage bifu-cli configuration and profiles",
 		Long: `Manage bifu-cli configuration stored at ~/.bifu-cli/config.yaml.
 
-Supports multiple named profiles (like Solana CLI profiles).
+Supports multiple named profiles (like OKX CLI profiles).
 Each profile stores endpoints, auth credentials, and connection settings.`,
 	}
 

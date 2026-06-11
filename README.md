@@ -2,7 +2,7 @@
 
 BifuFX 交易平台命令行工具，支持现货、合约、外汇(MT5/Tradefi)交易，以及 WebSocket 实时行情订阅。
 
-设计灵感来自 [Solana CLI](https://docs.solanalabs.com/cli)，采用多 Profile 配置管理，可在 custom/dev/staging/prod 环境之间快速切换。
+设计灵感来自 [OKX CLI](https://github.com/okx/agent-trade-kit)，采用多 Profile 配置管理，可在 custom/dev/staging/prod 环境之间快速切换。
 
 ---
 
@@ -70,7 +70,7 @@ bifu-cli forex order create --login-id 90390034 --symbol EURUSD --type buy --vol
 
 ## config — 配置管理
 
-配置文件路径：`~/.bifu-cli/config.yaml`，支持多 Profile，类似 Solana CLI。
+配置文件路径：`~/.bifu-cli/config.yaml`，支持多 Profile，类似 OKX CLI。
 
 ### 初始化 Profile
 
