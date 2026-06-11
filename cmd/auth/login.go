@@ -7,11 +7,10 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"os/exec"
-	"runtime"
 	"strings"
 	"time"
 
+	"github.com/mdp/qrterminal/v3"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
@@ -31,10 +30,10 @@ func newLoginCmd(load LoadFn) *cobra.Command {
 Default: email/password — a verification code is sent to your email and you
 are prompted to enter it.
 
---device: browser-approved login (like ` + "`gh auth login`" + `). The CLI opens the
-approval page in your browser; you approve there (already logged in) and the
-CLI polls until it receives the session cookie. No password is typed in the
-terminal. Backed by the existing scan-to-login endpoints
+--device: scan-to-login (like ` + "`gh auth login`" + `). The CLI prints a QR code;
+scan it with the Bifu app (already logged in) to approve, and the CLI polls
+until it receives the session cookie. No password is typed in the terminal.
+Backed by the existing scan-to-login endpoints
 (/user/login/qr_code_get and /user/login/qr_code_check).`,
 		Example: `  bifu-cli auth login
   bifu-cli auth login --username user@example.com
@@ -151,7 +150,7 @@ terminal. Backed by the existing scan-to-login endpoints
 
 	cmd.Flags().StringVarP(&username, "username", "u", "", "Email / username")
 	cmd.Flags().StringVar(&password, "password", "", "Password (omit to be prompted securely)")
-	cmd.Flags().BoolVar(&device, "device", false, "Browser-approved login (like gh auth login): open the approval page, approve, poll for the cookie")
+	cmd.Flags().BoolVar(&device, "device", false, "Scan-to-login (like gh auth login): print a QR, scan with the Bifu app, poll for the cookie")
 	return cmd
 }
 
@@ -209,19 +208,19 @@ func runDeviceLogin(load LoadFn) error {
 		return fmt.Errorf("request login code failed: %w", err)
 	}
 
-	// Prefer the profile's web host so dev/staging open the right domain
+	// Prefer the profile's web host so the QR points at the right environment
 	// (qr_code_get returns a hard-coded prod URL).
-	openURL := qrURL
+	scanURL := qrURL
 	if profile.WebURL != "" {
-		openURL = strings.TrimRight(profile.WebURL, "/") + "/x/" + issueID
+		scanURL = strings.TrimRight(profile.WebURL, "/") + "/x/" + issueID
 	}
 
-	// ── Step 2: open the browser for the user to approve ──────────────────────
-	fmt.Printf("Opening %s in your browser to approve this login...\n", openURL)
-	if err := openBrowser(openURL); err != nil {
-		fmt.Printf("⚠ could not open the browser automatically (%v)\n  Open this URL manually:\n  %s\n", err, openURL)
-	}
-	fmt.Println("\nWaiting for you to approve the login in your browser...")
+	// ── Step 2: render a QR for the user to scan with the Bifu app ────────────
+	fmt.Println("\nScan this QR code with the Bifu app (already logged in) to approve:")
+	fmt.Println()
+	qrterminal.GenerateHalfBlock(scanURL, qrterminal.L, os.Stdout)
+	fmt.Printf("\nOr open this link on your phone:\n  %s\n", scanURL)
+	fmt.Println("\nWaiting for approval...")
 
 	// ── Step 3: poll until approved / rejected / expired ──────────────────────
 	deadline := time.Now().Add(3 * time.Minute)
@@ -348,19 +347,6 @@ func extractCookieValue(cookieStr string) string {
 // devicePollInterval is how long the CLI waits between approval polls. It is a
 // variable so tests can shorten it.
 var devicePollInterval = 3 * time.Second
-
-// openBrowser launches the OS default browser at url. It is a variable so tests
-// can stub it out instead of spawning a real browser.
-var openBrowser = func(url string) error {
-	switch runtime.GOOS {
-	case "darwin":
-		return exec.Command("open", url).Start()
-	case "windows":
-		return exec.Command("rundll32", "url.dll,FileProtocolHandler", url).Start()
-	default:
-		return exec.Command("xdg-open", url).Start()
-	}
-}
 
 // ── API helpers ───────────────────────────────────────────────────────────────
 

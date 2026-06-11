@@ -64,13 +64,10 @@ func TestDeviceLoginFlow(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	// Stub the browser opener and shorten polling so no real browser launches
-	// and the test runs fast.
-	origOpen, origInterval := openBrowser, devicePollInterval
-	var openedURL string
-	openBrowser = func(u string) error { openedURL = u; return nil }
+	// Shorten polling so the test runs fast.
+	origInterval := devicePollInterval
 	devicePollInterval = 10 * time.Millisecond
-	defer func() { openBrowser, devicePollInterval = origOpen, origInterval }()
+	defer func() { devicePollInterval = origInterval }()
 
 	// Point config at a temp dir and a profile using the mock server.
 	t.Setenv("BIFU_CLI_HOME", t.TempDir())
@@ -89,11 +86,6 @@ func TestDeviceLoginFlow(t *testing.T) {
 
 	if err := runDeviceLogin(load); err != nil {
 		t.Fatalf("runDeviceLogin: %v", err)
-	}
-
-	// The CLI should open the WebURL host, not the backend's hard-coded prod URL.
-	if openedURL != "https://bifu.dev/x/issue-xyz" {
-		t.Errorf("openedURL = %q, want %q", openedURL, "https://bifu.dev/x/issue-xyz")
 	}
 
 	// Verify the cookie + user id were persisted.

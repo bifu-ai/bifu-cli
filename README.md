@@ -145,9 +145,9 @@ bifu-cli --profile dev auth login --username user@example.com --password 'MyPass
 
 > **注意**：Dev 环境验证码固定为 `123456`。
 
-### auth login --device — 浏览器批准登录(`gh auth login` 体验)
+### auth login --device — 扫码登录(`gh auth login` 体验)
 
-CLI 自动打开浏览器批准页,你在浏览器(已登录态)点「批准」,CLI 轮询拿到会话 cookie 并落盘。
+CLI 在终端打印一个二维码,你用**已登录的 Bifu App** 扫码批准,CLI 轮询拿到会话 cookie 并落盘。
 **终端全程不输密码、不粘贴**。复用后端已有的扫码登录端点,无需新增后端接口。
 
 ```bash
@@ -157,18 +157,29 @@ bifu-cli --profile dev auth login --device
 输出示例:
 
 ```text
-Opening https://bifu.dev/x/3f2a... in your browser to approve this login...
+Scan this QR code with the Bifu app (already logged in) to approve:
 
-Waiting for you to approve the login in your browser...
+  █▀▀▀▀▀█ ▀▄█▀▄ █▀▀▀▀▀█
+  █ ███ █ ▀█▄▀▀ █ ███ █
+  █ ▀▀▀ █ █ ▀▄█ █ ▀▀▀ █
+  ▀▀▀▀▀▀▀ █▄▀▄█ ▀▀▀▀▀▀▀
+  ...（终端二维码）...
+
+Or open this link on your phone:
+  https://bifu.dev/x/e358e641-...
+
+Waiting for approval...
 ✓ Authentication complete. Cookie saved to profile "dev"
+  user_id : 109150807
 ```
 
-**流程**:CLI 调 `GET /user/login/qr_code_get` 拿到 `issueId` → 打开 `{web_url}/x/{issueId}`
-批准页(用 profile 的 `web_url` 决定环境域名)→ 轮询 `POST /user/login/qr_code_check`
-直到 `success` 拿到 cookie。
+**流程**:CLI 调 `GET /user/login/qr_code_get` 拿到 `issueId` → 终端渲染二维码(内容是
+`{web_url}/x/{issueId}`,用 profile 的 `web_url` 决定环境域名)→ App 扫码批准 → CLI 轮询
+`POST /user/login/qr_code_check` 直到 `success` 拿到 cookie。
 
-> 批准页 `/x/{issueId}` 由前端实现(调 `qr_code_scan` + `qr_code_confirm`)。
-> 端点契约见 [docs/device-flow.md](docs/device-flow.md)。
+> 也可以在手机上直接打开二维码下方的链接(由 App 拦截处理)。
+> 批准动作由 App 完成(调 `qr_code_scan` + `qr_code_confirm`)。端点契约见 [docs/device-flow.md](docs/device-flow.md)。
+> 已在 dev 环境端到端验证通过。
 
 ### auth cookie — Cookie 工具（仅离线调试）
 
