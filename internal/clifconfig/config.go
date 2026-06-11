@@ -32,7 +32,7 @@ type Profile struct {
 
 	// ── Endpoints ────────────────────────────────────────────────────────────
 	BaseURL      string `yaml:"base_url"`      // HTTP API base (e.g. https://api.bifu.dev)
-	WebURL       string `yaml:"web_url"`       // Web app login page (e.g. https://app.bifu.dev), used by `auth login --web`
+	WebURL       string `yaml:"web_url"`       // Web app URL (e.g. https://bifu.dev), informational
 	WebSocketURL string `yaml:"websocket_url"` // WS base (e.g. wss://api.bifu.dev)
 	GrpcSpot     string `yaml:"grpc_spot"`     // Spot gRPC addr (host:port)
 	GrpcContract string `yaml:"grpc_contract"` // Contract gRPC addr (host:port)

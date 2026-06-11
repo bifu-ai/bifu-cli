@@ -183,7 +183,7 @@ func newSetCmd() *cobra.Command {
 	cmd.Flags().StringVar(&profile, "profile", "", "Profile to update (default: active profile)")
 	// Endpoint flags
 	cmd.Flags().StringVar(&baseURL, "base-url", "", "HTTP API base URL")
-	cmd.Flags().StringVar(&webURL, "web-url", "", "Web app login page URL (used by `auth login --web`)")
+	cmd.Flags().StringVar(&webURL, "web-url", "", "Web app URL (informational)")
 	cmd.Flags().StringVar(&wsURL, "ws-url", "", "WebSocket base URL")
 	cmd.Flags().StringVar(&grpcSpot, "grpc-spot", "", "Spot gRPC address (host:port)")
 	cmd.Flags().StringVar(&grpcContract, "grpc-contract", "", "Contract gRPC address (host:port)")

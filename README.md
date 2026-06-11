@@ -145,33 +145,28 @@ bifu-cli --profile dev auth login --username user@example.com --password 'MyPass
 
 > **注意**：Dev 环境验证码固定为 `123456`。
 
-### auth login --web — 浏览器登录
+### auth login --device — 设备授权登录(真·`gh auth login` 体验)
 
-类似 `gh auth login`:CLI 自动打开网页登录页,你在浏览器里正常登录后,把 `user_auth_name`
-Cookie 贴回终端即可(免在终端输入密码/验证码)。
-
-`config init` 已为各环境预置网页地址(dev=`https://bifu.dev`、prod=`https://bifu.co`),
-所以 `--web` 开箱即用,无需额外配置。
+完全对标 `gh auth login`:CLI 显示一次性 code、自动打开浏览器到授权页、轮询直到你在浏览器点「授权」,
+token 自动落盘。**终端全程不输密码、不粘贴**。
 
 ```bash
-# 浏览器登录（用 profile 预置的 web_url）
-bifu-cli --profile dev auth login --web
-
-# 临时指定登录页 URL（覆盖 web_url）
-bifu-cli auth login --web --url https://bifu.dev
-
-# 如需为自定义 profile 单独设置网页地址
-bifu-cli config set --web-url https://bifu.dev
+bifu-cli --profile dev auth login --device
 ```
 
-**流程：**
+输出示例:
 
-1. CLI 打开网页登录页（用 `--url`，否则用 profile 的 `web_url`）
-2. 你在浏览器正常登录
-3. 从 DevTools → Application → Cookies 复制 `user_auth_name` 的值
-4. 粘贴回终端,自动保存到 profile
+```text
+! First copy your one-time code: ABCD-1234
 
-> 粘贴时可直接贴 `user_auth_name=xxx; ...` 整段 Cookie，CLI 会自动提取出真实值。
+Opening https://bifu.dev/device?code=ABCD-1234 in your browser to authorize...
+
+Waiting for authorization...
+✓ Authentication complete. Cookie saved to profile "dev"
+```
+
+> ⚠️ **依赖后端两个端点** `POST /user/device_code` 与 `POST /user/device_token`。
+> CLI 侧已实现完毕,接口契约见 [docs/device-flow.md](docs/device-flow.md);后端上线后此命令即可直接用。
 
 ### auth cookie — Cookie 工具（仅离线调试）
 
