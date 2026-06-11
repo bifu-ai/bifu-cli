@@ -9,7 +9,7 @@ require (
 	github.com/jedib0t/go-pretty/v6 v6.8.1
 	github.com/mark3labs/mcp-go v0.54.1
 	github.com/mdp/qrterminal/v3 v3.2.1
-	github.com/spf13/cobra v1.10.1
+	github.com/spf13/cobra v1.10.2
 	golang.org/x/term v0.44.0
 	gopkg.in/yaml.v3 v3.0.1
 )
