@@ -31,10 +31,11 @@ func newLoginCmd(load LoadFn) *cobra.Command {
 Default: email/password — a verification code is sent to your email and you
 are prompted to enter it.
 
---device: OAuth-style device login (like ` + "`gh auth login`" + `). The CLI shows a
-one-time code, opens the browser to the verification page, and polls until you
-approve. No password is typed in the terminal. Requires backend device
-endpoints (/user/device_code and /user/device_token).`,
+--device: browser-approved login (like ` + "`gh auth login`" + `). The CLI opens the
+approval page in your browser; you approve there (already logged in) and the
+CLI polls until it receives the session cookie. No password is typed in the
+terminal. Backed by the existing scan-to-login endpoints
+(/user/login/qr_code_get and /user/login/qr_code_check).`,
 		Example: `  bifu-cli auth login
   bifu-cli auth login --username user@example.com
   bifu-cli --profile dev auth login
@@ -150,47 +151,44 @@ endpoints (/user/device_code and /user/device_token).`,
 
 	cmd.Flags().StringVarP(&username, "username", "u", "", "Email / username")
 	cmd.Flags().StringVar(&password, "password", "", "Password (omit to be prompted securely)")
-	cmd.Flags().BoolVar(&device, "device", false, "OAuth-style device login (like gh auth login): show a code, open the browser, poll for approval")
+	cmd.Flags().BoolVar(&device, "device", false, "Browser-approved login (like gh auth login): open the approval page, approve, poll for the cookie")
 	return cmd
 }
 
-// ── Device flow (gh auth login style) ───────────────────────────────────────
+// ── Device login (gh auth login style, backed by the QR-login endpoints) ─────
 //
-// Implements the OAuth 2.0 Device Authorization Grant (RFC 8628) against the
-// bifu backend. Requires two server endpoints:
+// Reuses the backend's existing scan-to-login (QR) flow — no dedicated device
+// endpoints needed:
 //
-//   POST /user/device_code   → issue a (deviceCode, userCode) pair
-//   POST /user/device_token  → poll until the user approves in the browser
+//   GET  /user/login/qr_code_get    → issue an issueId + an approval URL
+//   POST /user/login/qr_code_check  → poll until a logged-in browser approves
 //
-// See docs/device-flow.md for the full request/response contract.
+// The CLI opens the approval URL in the browser; the user (already logged in on
+// the web) approves, and the CLI polls until it receives the session cookie.
 
-type deviceCodeResp struct {
+type qrGetResp struct {
 	RetCode string `json:"retCode"`
 	RetMsg  string `json:"retMsg"`
 	Result  struct {
-		DeviceCode              string `json:"deviceCode"`
-		UserCode                string `json:"userCode"`
-		VerificationURI         string `json:"verificationUri"`
-		VerificationURIComplete string `json:"verificationUriComplete"`
-		ExpiresIn               int    `json:"expiresIn"` // seconds
-		Interval                int    `json:"interval"`  // poll seconds
+		URL     string `json:"url"`
+		IssueID string `json:"issueId"`
 	} `json:"result"`
 }
 
-type deviceTokenResp struct {
+type qrCheckResp struct {
 	RetCode string `json:"retCode"`
 	RetMsg  string `json:"retMsg"`
 	Result  struct {
-		// status: pending | slow_down | success | denied | expired
-		Status    string `json:"status"`
-		CookieStr string `json:"cookieStr"`
-		User      struct {
+		// pending | processing | refused | expired | success
+		IssueStatus string `json:"issueStatus"`
+		CookieStr   string `json:"cookieStr"`
+		User        struct {
 			UserID string `json:"userId"`
 		} `json:"user"`
 	} `json:"result"`
 }
 
-// runDeviceLogin drives the device authorization grant end to end.
+// runDeviceLogin drives browser-approved login end to end via the QR endpoints.
 func runDeviceLogin(load LoadFn) error {
 	profile, _, err := load()
 	if err != nil {
@@ -205,45 +203,37 @@ func runDeviceLogin(load LoadFn) error {
 		termType = "API"
 	}
 
-	// ── Step 1: request a device + user code ──────────────────────────────────
-	dc, err := requestDeviceCode(baseURL, termType)
+	// ── Step 1: request an approval issue ─────────────────────────────────────
+	issueID, qrURL, err := qrCodeGet(baseURL, termType)
 	if err != nil {
-		return fmt.Errorf("device authorization request failed: %w", err)
+		return fmt.Errorf("request login code failed: %w", err)
 	}
 
-	verifyURL := dc.Result.VerificationURIComplete
-	if verifyURL == "" {
-		verifyURL = dc.Result.VerificationURI
+	// Prefer the profile's web host so dev/staging open the right domain
+	// (qr_code_get returns a hard-coded prod URL).
+	openURL := qrURL
+	if profile.WebURL != "" {
+		openURL = strings.TrimRight(profile.WebURL, "/") + "/x/" + issueID
 	}
 
-	// ── Step 2: show the code and open the browser ────────────────────────────
-	fmt.Printf("\n! First copy your one-time code: %s\n\n", dc.Result.UserCode)
-	fmt.Printf("Opening %s in your browser to authorize...\n", verifyURL)
-	if err := openBrowser(verifyURL); err != nil {
-		fmt.Printf("⚠ could not open the browser automatically (%v)\n  Open this URL manually:\n  %s\n", err, verifyURL)
+	// ── Step 2: open the browser for the user to approve ──────────────────────
+	fmt.Printf("Opening %s in your browser to approve this login...\n", openURL)
+	if err := openBrowser(openURL); err != nil {
+		fmt.Printf("⚠ could not open the browser automatically (%v)\n  Open this URL manually:\n  %s\n", err, openURL)
 	}
+	fmt.Println("\nWaiting for you to approve the login in your browser...")
 
-	// ── Step 3: poll until approved / denied / expired ────────────────────────
-	interval := dc.Result.Interval
-	if interval <= 0 {
-		interval = 5
-	}
-	expiresIn := dc.Result.ExpiresIn
-	if expiresIn <= 0 {
-		expiresIn = 600
-	}
-	deadline := time.Now().Add(time.Duration(expiresIn) * time.Second)
-
-	fmt.Println("\nWaiting for authorization...")
+	// ── Step 3: poll until approved / rejected / expired ──────────────────────
+	deadline := time.Now().Add(3 * time.Minute)
 	for {
 		if time.Now().After(deadline) {
-			return fmt.Errorf("device code expired before authorization — run `bifu-cli auth login --device` again")
+			return fmt.Errorf("login not approved in time — run `bifu-cli auth login --device` again")
 		}
-		time.Sleep(time.Duration(interval) * time.Second)
+		time.Sleep(devicePollInterval)
 
-		cookieVal, userID, status, err := pollDeviceToken(baseURL, dc.Result.DeviceCode, termType)
+		status, cookieVal, userID, err := qrCodeCheck(baseURL, issueID, termType)
 		if err != nil {
-			return fmt.Errorf("device token poll failed: %w", err)
+			return fmt.Errorf("login status check failed: %w", err)
 		}
 		switch status {
 		case "success":
@@ -264,63 +254,54 @@ func runDeviceLogin(load LoadFn) error {
 				fmt.Printf("  user_id : %s\n", userID)
 			}
 			return nil
-		case "slow_down":
-			interval += 5 // RFC 8628: back off on slow_down
-		case "pending", "":
-			// keep polling
-		case "denied":
-			return fmt.Errorf("authorization was denied in the browser")
+		case "refused":
+			return fmt.Errorf("login was rejected in the browser")
 		case "expired":
-			return fmt.Errorf("device code expired — run `bifu-cli auth login --device` again")
+			return fmt.Errorf("login code expired — run `bifu-cli auth login --device` again")
 		default:
-			return fmt.Errorf("unexpected authorization status %q", status)
+			// pending / processing — keep waiting
 		}
 	}
 }
 
-func requestDeviceCode(baseURL, terminalType string) (*deviceCodeResp, error) {
-	body, _ := json.Marshal(map[string]string{"terminalType": terminalType})
-	req, err := http.NewRequest("POST", baseURL+"/user/device_code", bytes.NewReader(body))
+// qrCodeGet requests an approval issue and returns its id plus the approval URL.
+func qrCodeGet(baseURL, terminalType string) (issueID, url string, err error) {
+	req, err := http.NewRequest("GET", baseURL+"/user/login/qr_code_get", nil)
 	if err != nil {
-		return nil, err
+		return "", "", err
 	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("terminalType", terminalType)
-	req.Header.Set("locale", "en")
-	req.Header.Set("appVersion", "1.0.0")
+	setLoginHeaders(req, terminalType)
 
 	c := &http.Client{Timeout: 30 * time.Second}
 	resp, err := c.Do(req)
 	if err != nil {
-		return nil, err
+		return "", "", err
 	}
 	defer resp.Body.Close()
 
-	var out deviceCodeResp
+	var out qrGetResp
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
-		return nil, fmt.Errorf("decode response: %w", err)
+		return "", "", fmt.Errorf("decode response: %w", err)
 	}
 	if out.RetCode != "0" {
-		return nil, fmt.Errorf("[%s] %s", out.RetCode, out.RetMsg)
+		return "", "", fmt.Errorf("[%s] %s", out.RetCode, out.RetMsg)
 	}
-	if out.Result.DeviceCode == "" || out.Result.UserCode == "" {
-		return nil, fmt.Errorf("backend did not return a device/user code")
+	if out.Result.IssueID == "" {
+		return "", "", fmt.Errorf("backend did not return an issue id")
 	}
-	return &out, nil
+	return out.Result.IssueID, out.Result.URL, nil
 }
 
-// pollDeviceToken makes one poll request. status is one of:
-// success | pending | slow_down | denied | expired.
-func pollDeviceToken(baseURL, deviceCode, terminalType string) (cookieVal, userID, status string, err error) {
-	body, _ := json.Marshal(map[string]string{"deviceCode": deviceCode})
-	req, err := http.NewRequest("POST", baseURL+"/user/device_token", bytes.NewReader(body))
+// qrCodeCheck makes one poll. status is one of:
+// pending | processing | refused | expired | success.
+func qrCodeCheck(baseURL, issueID, terminalType string) (status, cookieVal, userID string, err error) {
+	body, _ := json.Marshal(map[string]string{"issueId": issueID})
+	req, err := http.NewRequest("POST", baseURL+"/user/login/qr_code_check", bytes.NewReader(body))
 	if err != nil {
 		return "", "", "", err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("terminalType", terminalType)
-	req.Header.Set("locale", "en")
-	req.Header.Set("appVersion", "1.0.0")
+	setLoginHeaders(req, terminalType)
 
 	c := &http.Client{Timeout: 30 * time.Second}
 	resp, err := c.Do(req)
@@ -329,17 +310,23 @@ func pollDeviceToken(baseURL, deviceCode, terminalType string) (cookieVal, userI
 	}
 	defer resp.Body.Close()
 
-	var out deviceTokenResp
+	var out qrCheckResp
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
 		return "", "", "", fmt.Errorf("decode response: %w", err)
 	}
 	if out.RetCode != "0" {
 		return "", "", "", fmt.Errorf("[%s] %s", out.RetCode, out.RetMsg)
 	}
-	if out.Result.Status == "success" {
-		return extractCookieValue(out.Result.CookieStr), out.Result.User.UserID, "success", nil
+	if out.Result.IssueStatus == "success" {
+		return "success", extractCookieValue(out.Result.CookieStr), out.Result.User.UserID, nil
 	}
-	return "", "", out.Result.Status, nil
+	return out.Result.IssueStatus, "", "", nil
+}
+
+func setLoginHeaders(req *http.Request, terminalType string) {
+	req.Header.Set("terminalType", terminalType)
+	req.Header.Set("locale", "en")
+	req.Header.Set("appVersion", "1.0.0")
 }
 
 // extractCookieValue pulls the bare cookie value from a backend cookieStr, which
@@ -357,6 +344,10 @@ func extractCookieValue(cookieStr string) string {
 	}
 	return cookieStr
 }
+
+// devicePollInterval is how long the CLI waits between approval polls. It is a
+// variable so tests can shorten it.
+var devicePollInterval = 3 * time.Second
 
 // openBrowser launches the OS default browser at url. It is a variable so tests
 // can stub it out instead of spawning a real browser.

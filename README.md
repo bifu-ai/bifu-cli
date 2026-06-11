@@ -145,10 +145,10 @@ bifu-cli --profile dev auth login --username user@example.com --password 'MyPass
 
 > **注意**：Dev 环境验证码固定为 `123456`。
 
-### auth login --device — 设备授权登录(真·`gh auth login` 体验)
+### auth login --device — 浏览器批准登录(`gh auth login` 体验)
 
-完全对标 `gh auth login`:CLI 显示一次性 code、自动打开浏览器到授权页、轮询直到你在浏览器点「授权」,
-token 自动落盘。**终端全程不输密码、不粘贴**。
+CLI 自动打开浏览器批准页,你在浏览器(已登录态)点「批准」,CLI 轮询拿到会话 cookie 并落盘。
+**终端全程不输密码、不粘贴**。复用后端已有的扫码登录端点,无需新增后端接口。
 
 ```bash
 bifu-cli --profile dev auth login --device
@@ -157,16 +157,18 @@ bifu-cli --profile dev auth login --device
 输出示例:
 
 ```text
-! First copy your one-time code: ABCD-1234
+Opening https://bifu.dev/x/3f2a... in your browser to approve this login...
 
-Opening https://bifu.dev/device?code=ABCD-1234 in your browser to authorize...
-
-Waiting for authorization...
+Waiting for you to approve the login in your browser...
 ✓ Authentication complete. Cookie saved to profile "dev"
 ```
 
-> ⚠️ **依赖后端两个端点** `POST /user/device_code` 与 `POST /user/device_token`。
-> CLI 侧已实现完毕,接口契约见 [docs/device-flow.md](docs/device-flow.md);后端上线后此命令即可直接用。
+**流程**:CLI 调 `GET /user/login/qr_code_get` 拿到 `issueId` → 打开 `{web_url}/x/{issueId}`
+批准页(用 profile 的 `web_url` 决定环境域名)→ 轮询 `POST /user/login/qr_code_check`
+直到 `success` 拿到 cookie。
+
+> 批准页 `/x/{issueId}` 由前端实现(调 `qr_code_scan` + `qr_code_confirm`)。
+> 端点契约见 [docs/device-flow.md](docs/device-flow.md)。
 
 ### auth cookie — Cookie 工具（仅离线调试）
 

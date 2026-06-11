@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"bifu-cli/internal/clifconfig"
 	"bifu-cli/internal/output"
@@ -13,7 +14,7 @@ import (
 
 func TestExtractCookieValue(t *testing.T) {
 	cases := map[string]string{
-		`{"Name":"user_auth_name","Value":"abc123=="}`: "abc123==", // JSON http.Cookie
+		`{"Name":"user_auth_name","Value":"abc123=="}`: "abc123==",         // JSON http.Cookie
 		`rawCookieValue==`:                             "rawCookieValue==", // not JSON → as-is
 		``:                                             "",
 	}
@@ -25,40 +26,36 @@ func TestExtractCookieValue(t *testing.T) {
 }
 
 // TestDeviceLoginFlow drives runDeviceLogin end to end against a mock backend
-// that implements the device-flow contract: device_code issues a code, and
-// device_token returns "pending" once before "success".
+// implementing the QR-login endpoints: qr_code_get issues an issue, and
+// qr_code_check returns "processing" once before "success".
 func TestDeviceLoginFlow(t *testing.T) {
 	var polls int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
-		case "/user/device_code":
+		case "/user/login/qr_code_get":
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"retCode": "0",
 				"result": map[string]any{
-					"deviceCode":              "dev-code-xyz",
-					"userCode":                "ABCD-1234",
-					"verificationUri":         srv0(r) + "/device",
-					"verificationUriComplete": srv0(r) + "/device?code=ABCD-1234",
-					"expiresIn":               600,
-					"interval":                1, // poll fast in the test
+					"url":     "https://bifu.co/x/issue-xyz",
+					"issueId": "issue-xyz",
 				},
 			})
-		case "/user/device_token":
+		case "/user/login/qr_code_check":
 			n := atomic.AddInt32(&polls, 1)
 			if n < 2 {
 				_ = json.NewEncoder(w).Encode(map[string]any{
 					"retCode": "0",
-					"result":  map[string]any{"status": "pending"},
+					"result":  map[string]any{"issueStatus": "processing"},
 				})
 				return
 			}
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"retCode": "0",
 				"result": map[string]any{
-					"status":    "success",
-					"cookieStr": `{"Name":"user_auth_name","Value":"REALcookie=="}`,
-					"user":      map[string]any{"userId": "109150807"},
+					"issueStatus": "success",
+					"cookieStr":   `{"Name":"user_auth_name","Value":"REALcookie=="}`,
+					"user":        map[string]any{"userId": "109150807"},
 				},
 			})
 		default:
@@ -67,17 +64,20 @@ func TestDeviceLoginFlow(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	// Stub the browser opener so no real browser launches.
-	origOpen := openBrowser
+	// Stub the browser opener and shorten polling so no real browser launches
+	// and the test runs fast.
+	origOpen, origInterval := openBrowser, devicePollInterval
 	var openedURL string
 	openBrowser = func(u string) error { openedURL = u; return nil }
-	defer func() { openBrowser = origOpen }()
+	devicePollInterval = 10 * time.Millisecond
+	defer func() { openBrowser, devicePollInterval = origOpen, origInterval }()
 
 	// Point config at a temp dir and a profile using the mock server.
 	t.Setenv("BIFU_CLI_HOME", t.TempDir())
 	cfg, _ := clifconfig.Load()
 	p := cfg.EnsureProfile("default")
 	p.BaseURL = srv.URL
+	p.WebURL = "https://bifu.dev"
 	if err := cfg.Save(); err != nil {
 		t.Fatalf("save config: %v", err)
 	}
@@ -91,8 +91,9 @@ func TestDeviceLoginFlow(t *testing.T) {
 		t.Fatalf("runDeviceLogin: %v", err)
 	}
 
-	if openedURL == "" {
-		t.Error("browser opener was not called")
+	// The CLI should open the WebURL host, not the backend's hard-coded prod URL.
+	if openedURL != "https://bifu.dev/x/issue-xyz" {
+		t.Errorf("openedURL = %q, want %q", openedURL, "https://bifu.dev/x/issue-xyz")
 	}
 
 	// Verify the cookie + user id were persisted.
@@ -104,12 +105,6 @@ func TestDeviceLoginFlow(t *testing.T) {
 		t.Errorf("saved user_id = %q, want %q", uid, "109150807")
 	}
 	if polls < 2 {
-		t.Errorf("expected at least 2 polls (pending then success), got %d", polls)
+		t.Errorf("expected at least 2 polls (processing then success), got %d", polls)
 	}
-}
-
-// srv0 builds an absolute base URL from the inbound request (scheme is http in
-// httptest), used only to populate verification URLs in the mock response.
-func srv0(r *http.Request) string {
-	return "http://" + r.Host
 }

@@ -1,133 +1,91 @@
-# Device Login Flow (`bifu-cli auth login --device`)
+# Device Login (`bifu-cli auth login --device`)
 
-OAuth 2.0 Device Authorization Grant ([RFC 8628](https://datatracker.ietf.org/doc/html/rfc8628)),
-the same model as `gh auth login`. The CLI shows a one-time code, opens the
-browser to a verification page, and polls until the user approves. No password
-is typed in the terminal.
+A `gh auth login`-style flow: the CLI opens a browser approval page, the user
+(already logged in on the web) approves, and the CLI polls until it receives the
+session cookie. No password is typed in the terminal.
 
-The CLI side is **already implemented** ([cmd/auth/login.go](../cmd/auth/login.go),
-`runDeviceLogin`). It is ready the moment the backend ships the two endpoints
-below. Headers sent on both requests: `Content-Type: application/json`,
-`terminalType`, `locale`, `appVersion` (same as `/user/login`).
+This **reuses the backend's existing scan-to-login (QR) endpoints** — there are
+no dedicated device endpoints. The CLI side is implemented in
+[cmd/auth/login.go](../cmd/auth/login.go) (`runDeviceLogin`).
 
 ---
 
 ## Sequence
 
 ```
-CLI                         Backend                       Browser (user)
- │  POST /user/device_code    │                                 │
- │ ─────────────────────────► │                                 │
- │  ◄───────────────────────  │  deviceCode + userCode          │
- │                            │                                 │
- │  show userCode, open verificationUriComplete ───────────────►│
- │                            │       user logs in & approves   │
- │                            │ ◄────────────────────────────── │
- │  POST /user/device_token   │  (poll every `interval`s)       │
- │ ─────────────────────────► │                                 │
- │  ◄── status:"pending" ───  │                                 │
- │           ... repeat ...   │                                 │
- │  ◄── status:"success" ───  │  cookieStr + user               │
- │  save cookie to profile    │                                 │
+CLI                              Backend                    Browser (logged-in user)
+ │ GET  /user/login/qr_code_get    │                              │
+ │ ──────────────────────────────► │  issueId + url               │
+ │ ◄──────────────────────────────                                │
+ │ open {web_url}/x/{issueId} ────────────────────────────────────►│
+ │                                 │      page: qr_code_scan       │
+ │                                 │ ◄──────────────────────────── │
+ │                                 │      page: qr_code_confirm    │
+ │                                 │ ◄──────────────────────────── │ (is_confirm=1)
+ │ POST /user/login/qr_code_check  │                              │
+ │ ──────────────────────────────► │  (poll every 3s)             │
+ │ ◄── issueStatus:"processing" ─                                  │
+ │           ... repeat ...        │                              │
+ │ ◄── issueStatus:"success" ───   │  cookieStr + user            │
+ │ save cookie to profile          │                              │
 ```
+
+The CLI opens `{profile.web_url}/x/{issueId}` (e.g. `https://bifu.dev/x/...`),
+not the `url` returned by the backend — `qr_code_get` returns a hard-coded prod
+URL, so the CLI rewrites the host using the profile's `web_url` to hit the right
+environment.
 
 ---
 
-## Endpoint 1 — issue codes
+## Endpoints used (already exist on `develop`)
 
-`POST /user/device_code`
+### `GET /user/login/qr_code_get`
 
-**Request**
-
-```json
-{ "terminalType": "API" }
-```
-
-**Response** (envelope identical to `/user/login`: `retCode` `"0"` = OK)
+Response (envelope: `retCode == "0"` is OK):
 
 ```json
-{
-  "retCode": "0",
-  "retMsg": "",
-  "result": {
-    "deviceCode": "long-opaque-secret-bound-to-this-attempt",
-    "userCode": "ABCD-1234",
-    "verificationUri": "https://bifu.dev/device",
-    "verificationUriComplete": "https://bifu.dev/device?code=ABCD-1234",
-    "expiresIn": 600,
-    "interval": 5
-  }
-}
+{ "retCode": "0", "result": { "url": "https://bifu.co/x/<issueId>", "issueId": "<issueId>" } }
 ```
 
-| Field | Meaning |
-|-------|---------|
-| `deviceCode` | Opaque secret the CLI polls with. Not shown to the user. |
-| `userCode` | Short human code the user confirms in the browser (e.g. `ABCD-1234`). |
-| `verificationUri` | Page where the user enters/approves the code. |
-| `verificationUriComplete` | Same page with `userCode` prefilled (the CLI opens this). |
-| `expiresIn` | Seconds until `deviceCode` expires (CLI stops polling after this). |
-| `interval` | Minimum seconds between polls. |
-
----
-
-## Endpoint 2 — poll for approval
-
-`POST /user/device_token`
-
-**Request**
+### `POST /user/login/qr_code_check`
 
 ```json
-{ "deviceCode": "long-opaque-secret-bound-to-this-attempt" }
+{ "issueId": "<issueId>" }
 ```
 
-**Response** — always `retCode: "0"`; the state lives in `result.status`:
+Response — state is in `result.issueStatus`:
 
-| `result.status` | Meaning | CLI behaviour |
-|-----------------|---------|---------------|
-| `pending` | User has not approved yet | keep polling |
-| `slow_down` | Polling too fast | increases interval by 5s, keeps polling |
-| `success` | Approved | save cookie, stop |
-| `denied` | User rejected | error out |
-| `expired` | `deviceCode` expired | error out |
+| `issueStatus` | CLI behaviour |
+|---------------|---------------|
+| `pending` / `processing` | keep polling |
+| `success` | save `result.cookieStr` (JSON `http.Cookie`, the CLI extracts `.Value`) + `result.user.userId`, stop |
+| `refused` | error: rejected in browser |
+| `expired` | error: code expired |
 
-Pending example:
-
-```json
-{ "retCode": "0", "result": { "status": "pending" } }
-```
-
-Success example (`cookieStr` is the **same JSON-serialised `http.Cookie`** that
-`/user/login_check` already returns — the CLI extracts `.Value`):
+Success example:
 
 ```json
 {
   "retCode": "0",
   "result": {
-    "status": "success",
+    "issueStatus": "success",
     "cookieStr": "{\"Name\":\"user_auth_name\",\"Value\":\"<session-cookie>\"}",
     "user": { "userId": "109150807" }
   }
 }
 ```
 
-A nonzero `retCode` is treated as a hard error (message shown to the user), so
-keep transient device states inside `result.status`, not in `retCode`.
-
 ---
 
-## Browser side (`verificationUri` page)
+## Browser approval page — `/x/{issueId}` (frontend)
 
-A logged-in user lands on `verificationUri`, sees the `userCode` (prefilled from
-`verificationUriComplete`), and clicks **Approve**. That approval is what flips
-the next `device_token` poll to `success`. If the user is not logged in, the
-page should send them through normal login first, then back to approval.
+A logged-in user lands on `/x/{issueId}` and approves. The page drives the
+backend's two-step confirm:
 
-## Notes
+1. `POST /user/login/qr_code_scan` `{ "issueId": "<issueId>" }` → moves the issue
+   to `processing`.
+2. `POST /user/login/qr_code_confirm` `{ "issueId": "<issueId>", "isConfirm": "1" }`
+   (requires the user's session) → moves it to `success:{userId}`.
 
-- `deviceCode` must be single-use and bound to the issuing client; expire it
-  after `expiresIn`.
-- The dev environment may keep the fixed verification-code convention; the
-  device page can auto-approve in dev to make CLI testing trivial.
-- No CLI change is needed when this ships — `bifu-cli auth login --device`
-  already speaks this contract.
+`is_confirm = "0"` rejects (→ `refused`). The issue TTL is short (60s, reset on
+each step), so the page should call scan immediately on load.
