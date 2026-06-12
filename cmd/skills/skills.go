@@ -76,39 +76,104 @@ func newShowCmd() *cobra.Command {
 }
 
 func newInstallCmd() *cobra.Command {
-	return &cobra.Command{
+	var client string
+	var global bool
+	cmd := &cobra.Command{
 		Use:   "install [dir]",
-		Short: "Write the SKILL.md files to a directory for your agent to read",
-		Long: `Write each skill to <dir>/<name>/SKILL.md (default dir: ./bifu-skills).
-Point your agent at that directory (e.g. an agent's skills/rules folder).`,
+		Short: "Install the skills into an agent's standard directory (or a custom dir)",
+		Long: `Install the embedded skills so an AI agent can read them.
+
+  --client claude   → .claude/skills/<name>/SKILL.md   (--global: ~/.claude/skills)
+  --client cursor   → .cursor/rules/<name>.mdc         (--global: ~/.cursor/rules)
+  [dir]             → <dir>/<name>/SKILL.md             (default: ./bifu-skills)
+
+Cursor uses its Project Rules format (.mdc); Claude Code uses SKILL.md.`,
+		Example: `  bifu-cli skills install --client claude
+  bifu-cli skills install --client cursor --global
+  bifu-cli skills install ./my-agent/skills`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
-			dir := "bifu-skills"
-			if len(args) == 1 {
-				dir = args[0]
-			}
-			if dir == "~" || len(dir) >= 2 && dir[:2] == "~/" {
-				home, _ := os.UserHomeDir()
-				dir = filepath.Join(home, dir[1:])
-			}
 			items, err := skillsdata.List()
 			if err != nil {
 				return err
 			}
+
+			dir, cursor, err := resolveTarget(client, global, args)
+			if err != nil {
+				return err
+			}
+			if err := os.MkdirAll(dir, 0o755); err != nil {
+				return fmt.Errorf("create %s: %w", dir, err)
+			}
+
 			pr := output.NewPrinter(output.FormatTable, false)
 			for _, s := range items {
-				d := filepath.Join(dir, s.Name)
-				if err := os.MkdirAll(d, 0o755); err != nil {
-					return fmt.Errorf("create %s: %w", d, err)
+				var path string
+				var data []byte
+				if cursor {
+					path = filepath.Join(dir, s.Name+".mdc")
+					data = []byte(cursorMDC(s))
+				} else {
+					d := filepath.Join(dir, s.Name)
+					if err := os.MkdirAll(d, 0o755); err != nil {
+						return fmt.Errorf("create %s: %w", d, err)
+					}
+					path = filepath.Join(d, "SKILL.md")
+					data = []byte(s.Content)
 				}
-				p := filepath.Join(d, "SKILL.md")
-				if err := os.WriteFile(p, []byte(s.Content), 0o644); err != nil {
-					return fmt.Errorf("write %s: %w", p, err)
+				if err := os.WriteFile(path, data, 0o644); err != nil {
+					return fmt.Errorf("write %s: %w", path, err)
 				}
-				pr.Line("  %s", p)
+				pr.Line("  %s", path)
 			}
 			pr.OK("Installed %d skills to %s", len(items), dir)
 			return nil
 		},
 	}
+	cmd.Flags().StringVar(&client, "client", "", "Target agent: claude | cursor (writes to its standard dir)")
+	cmd.Flags().BoolVar(&global, "global", false, "Install to the user-level dir (~/...) instead of the current project")
+	_ = cmd.RegisterFlagCompletionFunc("client", func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
+		return []string{"claude", "cursor"}, cobra.ShellCompDirectiveNoFileComp
+	})
+	return cmd
+}
+
+// resolveTarget decides the output directory and whether to emit Cursor .mdc.
+func resolveTarget(client string, global bool, args []string) (dir string, cursor bool, err error) {
+	home, _ := os.UserHomeDir()
+	switch client {
+	case "claude":
+		if global {
+			return filepath.Join(home, ".claude", "skills"), false, nil
+		}
+		return filepath.Join(".claude", "skills"), false, nil
+	case "cursor":
+		if global {
+			return filepath.Join(home, ".cursor", "rules"), true, nil
+		}
+		return filepath.Join(".cursor", "rules"), true, nil
+	case "":
+		dir = "bifu-skills"
+		if len(args) == 1 {
+			dir = expandHome(args[0], home)
+		}
+		return dir, false, nil
+	default:
+		return "", false, fmt.Errorf("unknown --client %q (use: claude | cursor)", client)
+	}
+}
+
+func expandHome(p, home string) string {
+	if p == "~" {
+		return home
+	}
+	if len(p) >= 2 && p[:2] == "~/" {
+		return filepath.Join(home, p[2:])
+	}
+	return p
+}
+
+// cursorMDC renders a skill as a Cursor Project Rule (.mdc).
+func cursorMDC(s skillsdata.Skill) string {
+	return fmt.Sprintf("---\ndescription: %s\nalwaysApply: false\n---\n\n%s", s.Description, s.Body)
 }

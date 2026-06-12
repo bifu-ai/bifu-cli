@@ -21,7 +21,8 @@ type Skill struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
 	Auth        string `json:"auth"` // none | required | partial
-	Content     string `json:"-"`    // full SKILL.md text
+	Content     string `json:"-"`    // full SKILL.md text (with frontmatter)
+	Body        string `json:"-"`    // markdown body (frontmatter stripped)
 }
 
 type frontmatter struct {
@@ -62,7 +63,7 @@ func load(dir string) (Skill, error) {
 		return Skill{}, fmt.Errorf("skill %q not found", dir)
 	}
 	content := string(b)
-	fm := parseFrontmatter(content)
+	fm, body := parseFrontmatter(content)
 	name := fm.Name
 	if name == "" {
 		name = dir
@@ -71,19 +72,23 @@ func load(dir string) (Skill, error) {
 	if auth == "" {
 		auth = "none"
 	}
-	return Skill{Name: name, Description: fm.Description, Auth: auth, Content: content}, nil
+	return Skill{Name: name, Description: fm.Description, Auth: auth, Content: content, Body: body}, nil
 }
 
-func parseFrontmatter(s string) frontmatter {
+// parseFrontmatter returns the parsed YAML frontmatter and the markdown body
+// that follows the closing `---` delimiter.
+func parseFrontmatter(s string) (frontmatter, string) {
 	var fm frontmatter
 	if !strings.HasPrefix(s, "---") {
-		return fm
+		return fm, s
 	}
 	rest := s[3:]
 	end := strings.Index(rest, "\n---")
 	if end < 0 {
-		return fm
+		return fm, s
 	}
 	_ = yaml.Unmarshal([]byte(rest[:end]), &fm)
-	return fm
+	body := rest[end+len("\n---"):]
+	body = strings.TrimPrefix(body, "\n") // line after the closing ---
+	return fm, strings.TrimLeft(body, "\n")
 }

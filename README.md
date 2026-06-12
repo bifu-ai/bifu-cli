@@ -738,12 +738,19 @@ bifu-cli spot balance -o plain
 bifu-cli skills list                  # 列出技能(SKILL / AUTH / 说明)
 bifu-cli skills list --json
 bifu-cli skills show bifu-spot        # 打印某个技能的 SKILL.md
-bifu-cli skills install .claude/skills   # 写入目录供 agent 读取(默认 ./bifu-skills)
+
+# 直接装到对应 agent 的标准目录(类似 okx setup --client)
+bifu-cli skills install --client claude            # → .claude/skills/<name>/SKILL.md
+bifu-cli skills install --client claude --global   # → ~/.claude/skills/...
+bifu-cli skills install --client cursor            # → .cursor/rules/<name>.mdc(Project Rules 格式)
+bifu-cli skills install ./my-agent/skills          # 自定义目录(默认 ./bifu-skills)
 ```
 
-内置技能:`bifu-auth`(认证/配置)、`bifu-spot`、`bifu-contract`、`bifu-forex`、
-`bifu-payment`、`bifu-market`(WebSocket)。配合 `bifu-cli mcp`(MCP server)使用:
-agent 通过 MCP 调用工具,用 skills 理解每类任务的用法。
+内置 9 个技能:`bifu-auth`(登录)、`bifu-config`(配置/Profile)、`bifu-spot`、
+`bifu-contract`、`bifu-forex-trade`、`bifu-forex-account`、`bifu-payment`、
+`bifu-market-stream`(公共行情)、`bifu-private-stream`(私有/外汇推送)。
+
+配合 `bifu-cli mcp`(MCP server)使用:agent 通过 MCP 调用工具,用 skills 理解每类任务的用法。
 
 ---
 
