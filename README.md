@@ -446,8 +446,8 @@ bifu-cli forex account create --platform mt5 --type demo --currency USD --levera
 
 ```bash
 # 储蓄 → TradFi 外汇账户入金（已验证）
-#   --to-account-id 传创建时回显的 Account ID（内部 id，非 login）
-#   --from-account-id 传 USD 储蓄账户 id（见 payment balance 的 id）
+#   --from-account-id 传储蓄账户内部 id —— 见 `payment balance` 的 ACCOUNT_ID 列
+#   --to-account-id   传外汇账户内部 id（非 login）—— 见 `payment forex-accounts` 的 ACCOUNT_ID 列
 #   --mt-type 3 = TradFi（MT5 用 2 或省略）
 bifu-cli payment unified-transfer --from SAVING --to FOREX --amount 100 --currency USD \
   --from-account-id <savingAccountId> --to-account-id <forexAccountId> --mt-type 3

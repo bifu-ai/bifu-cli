@@ -78,10 +78,10 @@ func newBalanceCmd(load LoadFn) *cobra.Command {
 					continue
 				}
 				rows = append(rows, []string{
-					item.Currency, item.Balance, item.AvailableBalance, item.FrozenBalance,
+					item.ID, item.Currency, item.Balance, item.AvailableBalance, item.FrozenBalance,
 				})
 			}
-			pr.PrintTable([]string{"CURRENCY", "BALANCE", "AVAILABLE", "FROZEN"}, rows)
+			pr.PrintTable([]string{"ACCOUNT_ID", "CURRENCY", "BALANCE", "AVAILABLE", "FROZEN"}, rows)
 			pr.Line("Total (USD): %s", output.Bold(res.TotalUSD))
 			return nil
 		},
@@ -209,9 +209,9 @@ func newForexAccountsCmd(load LoadFn) *cobra.Command {
 			}
 			rows := make([][]string, 0, len(items))
 			for _, a := range items {
-				rows = append(rows, []string{a.Login, a.PlatformName(), a.Type + "/" + a.SubType, a.Status, a.Balance, a.Equity, a.MarginFree, a.Leverage, a.GroupType})
+				rows = append(rows, []string{a.Login, a.ID, a.PlatformName(), a.Type + "/" + a.SubType, a.Status, a.Balance, a.Equity, a.MarginFree, a.Leverage, a.GroupType})
 			}
-			pr.PrintTable([]string{"LOGIN", "PLATFORM", "TYPE", "STATUS", "BALANCE", "EQUITY", "FREE MARGIN", "LEVERAGE", "GROUP"}, rows)
+			pr.PrintTable([]string{"LOGIN", "ACCOUNT_ID", "PLATFORM", "TYPE", "STATUS", "BALANCE", "EQUITY", "FREE MARGIN", "LEVERAGE", "GROUP"}, rows)
 			return nil
 		},
 	}
