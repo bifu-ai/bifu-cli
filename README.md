@@ -728,6 +728,25 @@ bifu-cli spot balance -o plain
 
 ---
 
+## skills — Agent 技能（给 AI 代理用）
+
+参考 [OKX agent-trade-kit](https://github.com/okx/agent-trade-kit),bifu-cli 内置一组 `SKILL.md`
+「技能」指南,告诉 AI 代理(Claude Code / Cursor 等)**何时启用**、**如何调用 bifu-cli** 完成某类任务。
+技能已嵌入二进制,离线可用。
+
+```bash
+bifu-cli skills list                  # 列出技能(SKILL / AUTH / 说明)
+bifu-cli skills list --json
+bifu-cli skills show bifu-spot        # 打印某个技能的 SKILL.md
+bifu-cli skills install .claude/skills   # 写入目录供 agent 读取(默认 ./bifu-skills)
+```
+
+内置技能:`bifu-auth`(认证/配置)、`bifu-spot`、`bifu-contract`、`bifu-forex`、
+`bifu-payment`、`bifu-market`(WebSocket)。配合 `bifu-cli mcp`(MCP server)使用:
+agent 通过 MCP 调用工具,用 skills 理解每类任务的用法。
+
+---
+
 ## Makefile 命令
 
 ```bash
