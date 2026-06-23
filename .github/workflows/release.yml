@@ -34,25 +34,33 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
           HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
 
-  sync-readme:
+  sync-public:
     needs: goreleaser
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - name: Sync README into the public releases repo
+      - name: Sync README + skills into the public releases repo
         env:
-          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+          TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
         run: |
+          git config --global user.name "bifu-admin"
+          git config --global user.email "noreply@bifu.co"
+          tmp=$(mktemp -d)
+          git clone --depth 1 "https://x-access-token:${TOKEN}@github.com/decodeex/bifu-cli-releases.git" "$tmp"
+          # README with a distribution banner (source repo is private)
           {
             printf '> **bifu-cli 发布与下载仓库** —— 源码仓库私有,这里托管对外发布的二进制(curl / Homebrew / npm 从此处下载)。\n\n'
             printf -- '---\n\n'
             cat README.md
-          } > /tmp/RELEASES_README.md
-          SHA=$(gh api repos/decodeex/bifu-cli-releases/contents/README.md -q .sha 2>/dev/null || true)
-          gh api -X PUT repos/decodeex/bifu-cli-releases/contents/README.md \
-            -f message="docs: sync README from bifu-cli @ ${GITHUB_REF_NAME}" \
-            -f content="$(base64 -w0 /tmp/RELEASES_README.md)" \
-            ${SHA:+-f sha="$SHA"}
+          } > "$tmp/README.md"
+          # skills (SKILL.md guides only; drop the Go embed file)
+          rm -rf "$tmp/skills"
+          cp -R skills "$tmp/skills"
+          rm -f "$tmp/skills/embed.go"
+          cd "$tmp"
+          git add -A
+          git commit -m "docs: sync README + skills from bifu-cli @ ${GITHUB_REF_NAME}" || { echo "no changes"; exit 0; }
+          git push
 
   npm-publish:
     needs: goreleaser
