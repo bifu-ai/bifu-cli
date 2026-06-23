@@ -135,45 +135,121 @@ echo 123456 | bifu-cli --profile dev auth login --username you@example.com --pas
 
 ## 4. 常用命令
 
-### 余额 / 账户
+> 所有命令都可加 `-p/--profile <env>` 指定环境、`-o json`/`--json` 输出 JSON、
+> `-v` 调试。`--symbol`(现货 symbolId)、`--contract`(合约 contractId)是**数值 id**,
+> 不是 `BTCUSDT` 这种名称。
+
+### 4.1 余额 / 账户(只读)
+
 ```bash
-bifu-cli payment balance              # 法币储蓄余额
-bifu-cli payment balance --total      # 总资产(储蓄/外汇/跟单 + 合计)
-bifu-cli payment forex-accounts       # 外汇账户列表
-bifu-cli spot balance                 # 现货余额
-bifu-cli contract account             # 合约账户(权益/可用/未实现盈亏)
+bifu-cli payment balance                 # 法币储蓄余额(各币种 余额/可用/冻结)
+bifu-cli payment balance --currency USD  # 只看某币种
+bifu-cli payment balance --total         # 总资产(储蓄/外汇/跟单分项 + 合计 USD)
+bifu-cli payment forex-accounts          # 外汇账户列表(login/平台/余额/净值/可用保证金/杠杆)
+bifu-cli spot balance                    # 现货各币种余额
+bifu-cli contract account                # 合约账户(权益/可用/已用/未实现盈亏)
 ```
 
-### 现货 / 合约下单(`--symbol`/`--contract` 是数值 id)
-```bash
-bifu-cli spot order create --symbol 90000001 --side BUY --type LIMIT --price 100000 --size 0.001
-bifu-cli spot order list [--history]
-bifu-cli spot order cancel --order-id <id>          # 或 --all（会二次确认,-y 跳过）
+输出样例(`payment balance --total`):
 
-bifu-cli contract order create --contract 10000001 --side LONG --order-side BUY --size 0.001
-bifu-cli contract position list
+```text
+Total Balance
+  Total (USD)  180651.4894
+  Saving       108296.9594 (59.95%)
+  Forex        69849.34 (38.67%)
+  CopyTrade    2465.19 (1.36%)
 ```
 
-### 外汇(MT5/TradFi)
+### 4.2 现货交易(spot)
+
 ```bash
+# 下单:--symbol/--side/--size 必填
+bifu-cli spot order create --symbol 90000001 --side BUY --size 0.0001                 # 市价
+bifu-cli spot order create --symbol 90000001 --side SELL --type LIMIT --price 100000 --size 0.001
+#   --type   MARKET | LIMIT | STOP_LIMIT      (默认 MARKET)
+#   --price  限价价格 (默认 0)                  --tif GOOD_TIL_CANCEL|IMMEDIATE_OR_CANCEL|FILL_OR_KILL
+#   --client-id 自定义订单 ID
+
+# 查询
+bifu-cli spot order get --order-id <id>         # 单个(仅活动单)
+bifu-cli spot order list                        # 活动挂单
+bifu-cli spot order list --symbol 90000001      # 按 symbolId 过滤
+bifu-cli spot order list --history --limit 20   # 历史订单
+
+# 撤单
+bifu-cli spot order cancel --order-id <id>
+bifu-cli spot order cancel --all                # 撤全部(二次确认;-y 跳过)
+bifu-cli spot order cancel --all --symbol 90000001
+
+# 余额
+bifu-cli spot balance
+```
+
+> 常用 dev symbolId:`90000001`=BTC-USDT、`90000002`=ETH-USDT、`90000004`=SOL-USDT。
+
+### 4.3 合约交易(contract)
+
+方向:仓位 `--side LONG|SHORT` + 下单 `--order-side BUY|SELL`。开多=LONG+BUY,
+平多=LONG+SELL `--reduce-only`,开空=SHORT+SELL,平空=SHORT+BUY。
+
+```bash
+bifu-cli contract order create --contract 10000001 --side LONG --order-side BUY --size 0.001       # 市价开多
+bifu-cli contract order create --contract 10000001 --side SHORT --order-side SELL --type LIMIT --price 95000 --size 0.001
+bifu-cli contract order create --contract 10000001 --side LONG --order-side SELL --size 0.001 --reduce-only  # 平多
+#   --margin-mode SHARED|ISOLATED  --tif ...  --trigger-price/--trigger-type(条件单)
+
+bifu-cli contract order get --order-id <id>
+bifu-cli contract order list [--contract 10000001] [--history --limit 20]
+bifu-cli contract order cancel --order-id <id>     # 或 --all [--contract ...]
+bifu-cli contract position list [--contract 10000001]
+bifu-cli contract account
+```
+
+> 后端无改单接口:改价/改量请撤单后重下。dev:`10000001`=BTC 永续。
+
+### 4.4 外汇(forex,MT5 / TradFi)
+
+订单类型:`buy`/`sell`(市价);`buyLimit`/`sellLimit`/`buyStop`/`sellStop`(挂单)。
+
+```bash
+# 下单(--login-id 必填,--symbol 必填)
 bifu-cli forex order create --login-id 90390034 --symbol EURUSD --type buy --volume 0.01
+bifu-cli forex order create --login-id 90390034 --symbol EURUSD --type buyLimit --price 1.05 --volume 0.01 --sl 1.03 --tp 1.09
+
+bifu-cli forex order modify --login-id 90390034 --order-id <id> --sl 1.03 --tp 1.09
+bifu-cli forex order close  --login-id 90390034 --order-id <id>
+bifu-cli forex order cancel --login-id 90390034 --order-id <id>
+bifu-cli forex order history --login-id 90390034 --from 2026-01-01 --to 2026-12-31
 bifu-cli forex positions --login-id 90390034
-bifu-cli forex account create --platform tradfi --currency USD --leverage 100 --password 'Pass!'
+
+# 开户(--password 必填;--platform mt5|tradfi,--type live|demo,--leverage,--currency)
+bifu-cli forex account create --platform tradfi --currency USD --leverage 100 --password 'Pass123!'
+bifu-cli payment forex-accounts          # 列出账户 + login id
 ```
 
-### orion 信号订阅
+### 4.5 orion 信号订阅
+
 ```bash
-bifu-cli orion price                          # 定价(公开)
-bifu-cli orion signal                         # 当前信号(需订阅)
-bifu-cli orion signal-history --days 30       # 历史信号(按天数窗口分页)
-bifu-cli orion subscription                   # 当前订阅状态
+bifu-cli orion price                          # 订阅定价(公开)
+bifu-cli orion signal                         # 当前信号 + 活跃 buy/sell 计划(需订阅)
+bifu-cli orion signal-history --days 30       # 历史信号(--days 回溯天数,--page 第几个窗口)
+bifu-cli orion signal-history --days 90 --page 2
+bifu-cli orion subscription                   # 当前订阅状态/有效期
 ```
 
-### WebSocket 实时
+> `signal-history` 每条含 `type`(buy/sell)、`entry`、`sl`、`pt1`、`pt2`。
+> `--days` 是天数窗口:结果空就调大 `--days`。
+
+### 4.6 WebSocket 实时(`ws`,Ctrl-C 结束)
+
 ```bash
-bifu-cli ws market --channels ticker.BTCUSDT   # 公共行情(无需登录)
-bifu-cli ws pushgw                             # 外汇推送
+bifu-cli ws market --channels ticker.BTCUSDT             # 公共行情(无需登录)
+bifu-cli ws market --channels ticker.BTCUSDT,depth.BTCUSDT
+bifu-cli ws pushgw                                       # MT5 外汇推送
+bifu-cli ws config show                                  # 查看各 WS 端点 URL
 ```
+
+> `ws private` / `ws private --spot`(私有交易事件)当前需服务端鉴权握手,暂不可用。
 
 ---
 
