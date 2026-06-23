@@ -32,6 +32,26 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
           HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
 
+  sync-readme:
+    needs: goreleaser
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Sync README into the public releases repo
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+        run: |
+          {
+            printf '> **bifu-cli 发布与下载仓库** —— 源码仓库私有,这里托管对外发布的二进制(curl / Homebrew / npm 从此处下载)。\n\n'
+            printf -- '---\n\n'
+            cat README.md
+          } > /tmp/RELEASES_README.md
+          SHA=$(gh api repos/decodeex/bifu-cli-releases/contents/README.md -q .sha 2>/dev/null || true)
+          gh api -X PUT repos/decodeex/bifu-cli-releases/contents/README.md \
+            -f message="docs: sync README from bifu-cli @ ${GITHUB_REF_NAME}" \
+            -f content="$(base64 -w0 /tmp/RELEASES_README.md)" \
+            ${SHA:+-f sha="$SHA"}
+
   npm-publish:
     needs: goreleaser
     runs-on: ubuntu-latest
