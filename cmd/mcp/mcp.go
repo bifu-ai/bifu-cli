@@ -6,8 +6,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -61,7 +63,8 @@ func newSetupCmd() *cobra.Command {
 		Use:   "setup",
 		Short: "Register the bifu MCP server with an MCP client",
 		Example: `  bifu-cli mcp setup --client cursor
-  bifu-cli --profile dev mcp setup --client claude`,
+  bifu-cli --profile dev mcp setup --client claude
+  bifu-cli --profile dev mcp setup --client codex`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			pr := output.NewPrinter(output.FormatTable, false)
 
@@ -76,6 +79,12 @@ func newSetupCmd() *cobra.Command {
 				serverArgs = append(serverArgs, "--profile", profile)
 			}
 			entry := map[string]any{"command": exe, "args": serverArgs}
+
+			// Codex uses TOML (~/.codex/config.toml), not JSON — handle separately
+			// via the official `codex mcp add` (falls back to a TOML snippet).
+			if clientName == "codex" {
+				return setupCodex(pr, exe, profile)
+			}
 
 			path, key, err := clientConfigPath(clientName)
 			if err != nil {
@@ -95,8 +104,41 @@ func newSetupCmd() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&clientName, "client", "", "MCP client: claude | cursor | vscode (omit to print a snippet)")
+	cmd.Flags().StringVar(&clientName, "client", "", "MCP client: claude | cursor | vscode | codex (omit to print a snippet)")
 	return cmd
+}
+
+// setupCodex registers the bifu MCP server with the OpenAI Codex CLI. It prefers
+// the official `codex mcp add` (idempotent, owns ~/.codex/config.toml); if the
+// codex binary is absent it prints the TOML snippet to add manually.
+func setupCodex(pr *output.Printer, exe, profile string) error {
+	// The server command that Codex will spawn (after `--`).
+	serverCmd := []string{exe}
+	if profile != "" {
+		serverCmd = append(serverCmd, "--profile", profile)
+	}
+	serverCmd = append(serverCmd, "mcp", "serve")
+
+	if codexPath, err := exec.LookPath("codex"); err == nil {
+		addArgs := append([]string{"mcp", "add", "bifu", "--"}, serverCmd...)
+		out, err := exec.Command(codexPath, addArgs...).CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("codex mcp add failed: %w\n%s", err, strings.TrimSpace(string(out)))
+		}
+		pr.OK("Registered bifu MCP server with Codex (codex mcp add bifu)")
+		pr.Line("  Verify in the Codex TUI with: /mcp")
+		return nil
+	}
+
+	// codex not installed → print the TOML block for ~/.codex/config.toml.
+	quoted := make([]string, len(serverCmd)-1)
+	for i, a := range serverCmd[1:] {
+		quoted[i] = fmt.Sprintf("%q", a)
+	}
+	snippet := fmt.Sprintf("[mcp_servers.bifu]\ncommand = %q\nargs = [%s]\n", exe, strings.Join(quoted, ", "))
+	pr.Line("Codex CLI not found on PATH. Add this to ~/.codex/config.toml:\n\n%s", snippet)
+	pr.Line("(Or with Codex installed: codex mcp add bifu -- %s)", strings.Join(serverCmd, " "))
+	return nil
 }
 
 // clientConfigPath returns the config file path and the JSON key holding MCP
