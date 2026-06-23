@@ -25,10 +25,12 @@ jobs:
           version: latest
           args: release --clean
         env:
-          # The release is published to the PUBLIC decodeex/bifu-cli-releases
-          # repo (source repo is private), so GoReleaser needs a token with
-          # write access to it — the default GITHUB_TOKEN is scoped to this repo
-          # only. Reuse the same cross-repo token used for the tap.
+          # Cross-repo release token. GoReleaser publishes the GitHub Release to
+          # the PUBLIC decodeex/bifu-cli-releases repo and pushes the cask to
+          # decodeex/homebrew-tap (the default GITHUB_TOKEN is scoped to this
+          # private repo only). Use a fine-grained PAT (owner: decodeex) with
+          # access to BOTH decodeex/bifu-cli-releases and decodeex/homebrew-tap,
+          # permission Contents: Read and write.
           GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
           HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
 
