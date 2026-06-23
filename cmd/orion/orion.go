@@ -117,17 +117,22 @@ func newSignalCmd(load LoadFn) *cobra.Command {
 }
 
 func newHistoryCmd(load LoadFn) *cobra.Command {
-	var page, size int
+	var page, days int
 	cmd := &cobra.Command{
-		Use:     "signal-history",
-		Short:   "List past signals (details need a subscription)",
-		Example: "  bifu-cli orion signal-history --page 1 --size 20",
+		Use:   "signal-history",
+		Short: "List past signal calls over a look-back window",
+		Long: `List past signal calls (entry / stop / targets).
+
+Pagination is by DAY window: --days is how many days to look back, --page selects
+which window (1 = most recent --days days, 2 = the --days before that, ...).`,
+		Example: `  bifu-cli orion signal-history --days 30
+  bifu-cli orion signal-history --days 90 --page 2`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			c, pr, err := newClient(load)
 			if err != nil {
 				return err
 			}
-			res, err := c.GetSignalHistory(page, size)
+			res, err := c.GetSignalHistory(page, days)
 			if err != nil {
 				return err
 			}
@@ -138,16 +143,15 @@ func newHistoryCmd(load LoadFn) *cobra.Command {
 				})
 			}
 			pr.PrintTable([]string{"DATE", "PRODUCT", "SIDE", "ENTRY", "SL", "PT1", "PT2", "STATUS"}, rows)
-			if len(res.Items) == 0 && res.Total != "" && res.Total != "0" {
-				pr.Line("\n%s past signals exist, but details require an active subscription.", res.Total)
-			} else {
-				pr.Line("\nTotal: %s", res.Total)
+			if len(res.Items) == 0 {
+				pr.Line("\nNo signals in this %d-day window (page %d). Try a larger --days.", days, page)
 			}
+			pr.Line("\n%d call(s) shown · %s total in signal history.", len(res.Items), res.Total)
 			return nil
 		},
 	}
-	cmd.Flags().IntVar(&page, "page", 1, "Page number")
-	cmd.Flags().IntVar(&size, "size", 20, "Page size")
+	cmd.Flags().IntVar(&page, "page", 1, "Which day-window (1 = most recent)")
+	cmd.Flags().IntVar(&days, "days", 30, "Look-back window size in days")
 	return cmd
 }
 
