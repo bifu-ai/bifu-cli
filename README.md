@@ -16,7 +16,7 @@ curl -fsSL https://cli.bifu.dev/install.sh | bash
 brew install decodeex/tap/bifu-cli
 
 # npm
-npm i -g @decodeex/bifu-cli
+npm i -g @bifufx/bifu-cli
 ```
 
 从源码编译(需要 Go 1.25+):
@@ -775,7 +775,7 @@ make lint       # 静态分析（需安装 staticcheck）
 git tag v1.2.0 && git push origin v1.2.0
 ```
 
-- **`.github/workflows/release.yml`**:GoReleaser 跨平台编译(darwin/linux/windows × amd64/arm64)→ 建 GitHub Release(含 checksums)→ 推 Homebrew formula 到 `decodeex/homebrew-tap` → 发 `@decodeex/bifu-cli` 到 npm。
+- **`.github/workflows/release.yml`**:GoReleaser 跨平台编译(darwin/linux/windows × amd64/arm64)→ 建 GitHub Release(含 checksums)→ 推 Homebrew formula 到 `decodeex/homebrew-tap` → 发 `@bifufx/bifu-cli` 到 npm。
 - **`.github/workflows/ci.yml`**:push/PR 跑 build + vet + test + `goreleaser check` + staticcheck。
 - **`.github/workflows/pages.yml`**:把 `install.sh` 同步进 `docs/` 并部署到 GitHub Pages(`cli.bifu.dev`)。
 
