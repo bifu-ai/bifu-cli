@@ -1,5 +1,5 @@
 {
-  "name": "@bifufx/bifu-cli",
+  "name": "@decodeex/bifu-cli",
   "version": "0.0.0",
   "description": "BifuFX trading platform CLI — spot, contract, forex, WebSocket, MCP",
   "bin": {

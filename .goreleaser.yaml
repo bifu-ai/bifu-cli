@@ -78,4 +78,4 @@ release:
     ---
     Install: `curl -fsSL https://cli.bifu.dev/install.sh | bash`
     Homebrew: `brew install decodeex/tap/bifu-cli`
-    npm: `npm i -g @bifufx/bifu-cli`
+    npm: `npm i -g @decodeex/bifu-cli`
