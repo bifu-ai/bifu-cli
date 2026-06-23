@@ -15,6 +15,7 @@ import (
 	"bifu-cli/cmd/payment"
 	"bifu-cli/cmd/spot"
 	"bifu-cli/cmd/mcp"
+	"bifu-cli/cmd/orion"
 	skillscmd "bifu-cli/cmd/skills"
 	"bifu-cli/cmd/ws"
 	"bifu-cli/internal/client"
@@ -93,6 +94,7 @@ func init() {
 	rootCmd.AddCommand(payment.NewPaymentCmd(load))
 	rootCmd.AddCommand(forex.NewForexCmd(load))
 	rootCmd.AddCommand(ws.NewWSCmd(load))
+	rootCmd.AddCommand(orion.NewOrionCmd(load))
 	rootCmd.AddCommand(mcp.NewMCPCmd(load))
 	rootCmd.AddCommand(skillscmd.NewSkillsCmd())
 	rootCmd.AddCommand(newVersionCmd())

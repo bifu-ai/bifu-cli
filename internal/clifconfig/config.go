@@ -211,6 +211,11 @@ func (p *Profile) GetPaymentURL(path string) string {
 	return p.BaseURL + "/payment" + path
 }
 
+// GetOrionURL builds a URL for orion (signal subscription) service endpoints.
+func (p *Profile) GetOrionURL(path string) string {
+	return p.BaseURL + "/orion" + path
+}
+
 // GetWSMarketURL builds the full WebSocket URL for market data.
 // If WSMarket is already a full URL (starts with ws:// or wss://), it is returned as-is;
 // otherwise it is appended to WebSocketURL.

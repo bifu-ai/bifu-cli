@@ -687,6 +687,31 @@ bifu-cli config use dev
 
 ---
 
+## orion — 信号订阅行情(只读)
+
+orion 是 BifuFX 的**交易信号订阅**产品。`price` 公开;`signal` / `signal-history`
+明细需要有效订阅,`subscription` 需登录。统一走 `--profile` 的会话 cookie。
+
+```bash
+bifu-cli orion price                              # 订阅定价(公开)
+bifu-cli orion signal                             # 当前信号 + 活跃 buy/sell 计划(需订阅)
+bifu-cli orion signal-history --page 1 --size 20  # 历史信号(明细需订阅)
+bifu-cli orion subscription                       # 当前订阅状态/有效期(需登录)
+```
+
+`price` 示例输出:
+
+```text
+TYPE   PERIOD      USD    FREE   PROMO   STATUS
+STD    7 day       29.9   no     yes     on
+PRO    7 day       0      yes    no      on
+STD    1 month     100    no     yes     on
+```
+
+> 没有有效订阅时,`signal` / `signal-history` 会友好提示「需订阅查看明细」,不报错。
+
+---
+
 ## 输出格式
 
 ```bash
