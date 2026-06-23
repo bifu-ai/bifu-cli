@@ -171,7 +171,12 @@ func (c *HTTPClient) do(method, rawURL string, params map[string]string, body in
 	if c.Verbose {
 		fmt.Fprintf(os.Stderr, "[HTTP] %s %s\n", method, u.String())
 		for k, vs := range req.Header {
-			fmt.Fprintf(os.Stderr, "[HTTP]   %s: %s\n", k, strings.Join(vs, ", "))
+			val := strings.Join(vs, ", ")
+			// Never log session credentials (would leak into shell history / CI logs).
+			if h := strings.ToLower(k); h == "cookie" || h == "authorization" {
+				val = "<redacted>"
+			}
+			fmt.Fprintf(os.Stderr, "[HTTP]   %s: %s\n", k, val)
 		}
 		if bodyStr != "" {
 			fmt.Fprintf(os.Stderr, "[HTTP]   body: %s\n", bodyStr)

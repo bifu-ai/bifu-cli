@@ -29,5 +29,6 @@ Verify with any authenticated command, e.g. `bifu-cli spot balance`.
 ## Notes
 - A 401 from any command = session expired → run `auth login` again.
 - Pick the target profile with `-p/--profile <name>` (see bifu-config).
-- `auth cookie encode/decode/set` exist but are offline-debug only; backend now
-  validates the session server-side, so locally-generated cookies won't authenticate.
+- The session cookie is the only credential; it is never printed to the terminal
+  and is redacted in `-v/--verbose` output. There is no local cookie-generation
+  command — the backend validates sessions server-side.

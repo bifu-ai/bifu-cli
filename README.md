@@ -193,32 +193,6 @@ Waiting for approval...
 > 批准动作由 App 完成(调 `qr_code_scan` + `qr_code_confirm`)。端点契约见 [docs/device-flow.md](docs/device-flow.md)。
 > 已在 dev 环境端到端验证通过。
 
-### auth cookie — Cookie 工具（仅离线调试）
-
-> ⚠️ **已废弃**：后端现在会对 `user_auth_name` 做服务端会话校验，**本地生成的 Cookie
-> 无法通过任何认证接口**。请统一使用上面的 `bifu-cli auth login` 获取有效会话 Cookie。
-> 以下命令仅保留用于离线查看/调试 Cookie 格式。
-
-#### `set` / `encode`（已废弃，本地生成不再可用于鉴权）
-
-```bash
-# 生成并保存到 profile —— 已废弃，运行时会打印警告
-bifu-cli auth cookie set 620640738
-
-# 仅生成打印（不保存）
-bifu-cli auth cookie encode 620640738 --env dev
-```
-
-#### 解码 Cookie（仍可用，便于排查）
-
-```bash
-bifu-cli auth cookie decode "yHjCFUQ2jFBQ..."
-# 输出:
-#   uid : 620640738
-#   env : dev
-#   raw : 620640738=dev=C8DXTLEX=1770620640
-```
-
 ---
 
 ## spot — 现货交易

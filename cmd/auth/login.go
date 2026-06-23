@@ -139,11 +139,10 @@ Backed by the existing scan-to-login endpoints
 				return fmt.Errorf("save config: %w", err)
 			}
 
-			fmt.Printf("✓ Cookie saved to profile %q\n", cfg.ActiveProfile)
+			fmt.Printf("✓ Logged in. Session cookie saved to profile %q\n", cfg.ActiveProfile)
 			if userID != "" {
 				fmt.Printf("  user_id : %s\n", userID)
 			}
-			fmt.Printf("  cookie  : %s\n", cookieVal)
 			return nil
 		},
 	}
