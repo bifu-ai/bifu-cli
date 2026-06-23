@@ -69,9 +69,12 @@ homebrew_casks:
           end
 
 release:
+  # Source repo (decodeex/bifu-cli) is private, so publish the downloadable
+  # binaries to a dedicated PUBLIC repo. install.sh, the Homebrew cask, and the
+  # npm postinstall all fetch from here.
   github:
     owner: decodeex
-    name: bifu-cli
+    name: bifu-cli-releases
   draft: false
   prerelease: auto
   footer: |

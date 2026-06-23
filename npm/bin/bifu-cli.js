@@ -13,7 +13,7 @@ const bin = path.join(
 if (!fs.existsSync(bin)) {
   console.error(
     "bifu-cli binary not found. Reinstall the package, or grab a build from " +
-      "https://github.com/decodeex/bifu-cli/releases"
+      "https://github.com/decodeex/bifu-cli-releases/releases"
   );
   process.exit(1);
 }

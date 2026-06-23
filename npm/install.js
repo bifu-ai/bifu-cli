@@ -8,7 +8,7 @@ const path = require("path");
 const https = require("https");
 const { execFileSync } = require("child_process");
 
-const REPO = "decodeex/bifu-cli";
+const REPO = "decodeex/bifu-cli-releases"; // public repo hosting the binaries
 const pkg = require("./package.json");
 
 const OS = { darwin: "darwin", linux: "linux", win32: "windows" }[process.platform];

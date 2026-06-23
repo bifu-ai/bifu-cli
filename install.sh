@@ -7,7 +7,8 @@
 # Override version with BIFU_VERSION=v1.2.3.
 set -eu
 
-REPO="decodeex/bifu-cli"
+# Public repo that hosts the release binaries (source repo is private).
+REPO="decodeex/bifu-cli-releases"
 BINARY="bifu-cli"
 
 err() { echo "error: $*" >&2; exit 1; }
