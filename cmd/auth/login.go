@@ -228,9 +228,10 @@ func runDeviceLogin(load LoadFn) error {
 	// ── Step 2: render a QR for the user to scan with the Bifu app ────────────
 	fmt.Println("\nScan this QR code with the Bifu app (already logged in) to approve:")
 	fmt.Println()
-	qrterminal.GenerateHalfBlock(scanURL, qrterminal.L, os.Stdout)
-	fmt.Printf("\nOr open this link on your phone:\n  %s\n", scanURL)
-	fmt.Println("\nWaiting for approval...")
+	printApprovalQR(scanURL)
+	fmt.Printf("\nSame target as the QR (scanning with the Bifu app is easiest).\n"+
+		"Opening it in a browser only works if that browser is already signed in to Bifu:\n  %s\n", scanURL)
+	fmt.Println("\nWaiting for approval (expires in 3 min)...")
 
 	// ── Step 3: poll until approved / rejected / expired ──────────────────────
 	deadline := time.Now().Add(3 * time.Minute)
@@ -274,6 +275,30 @@ func runDeviceLogin(load LoadFn) error {
 			// pending / processing — keep waiting
 		}
 	}
+}
+
+// printApprovalQR renders the approval QR, adapting to where stdout goes:
+//
+//   - A real terminal (TTY) gets the compact half-block form (▀▄), which is
+//     crisp because each text row is drawn at the exact character-cell height.
+//   - When stdout is captured/piped — e.g. shown back through an AI tool or
+//     redirected to a file — half-blocks distort (line-spacing pulls the
+//     stacked half-modules apart) and the full-block ANSI form collapses if
+//     colors are stripped. So use glyph full-blocks (██ / spaces): no ANSI, one
+//     module per cell, which survives reflow far better. The printed link is the
+//     reliable fallback either way.
+func printApprovalQR(url string) {
+	if term.IsTerminal(int(os.Stdout.Fd())) {
+		qrterminal.GenerateHalfBlock(url, qrterminal.L, os.Stdout)
+		return
+	}
+	qrterminal.GenerateWithConfig(url, qrterminal.Config{
+		Level:     qrterminal.M, // more error correction → more robust after reflow
+		Writer:    os.Stdout,
+		BlackChar: "██",
+		WhiteChar: "  ",
+		QuietZone: 2,
+	})
 }
 
 // qrCodeGet requests an approval issue and returns its id plus the approval URL.
