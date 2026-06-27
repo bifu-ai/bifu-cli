@@ -98,6 +98,7 @@ func init() {
 	rootCmd.AddCommand(mcp.NewMCPCmd(load))
 	rootCmd.AddCommand(skillscmd.NewSkillsCmd())
 	rootCmd.AddCommand(newVersionCmd())
+	rootCmd.AddCommand(newUpgradeCmd())
 }
 
 func loadCtx() (*clifconfig.Profile, *output.Printer, error) {
@@ -128,11 +129,17 @@ func loadCtx() (*clifconfig.Profile, *output.Printer, error) {
 }
 
 func newVersionCmd() *cobra.Command {
-	return &cobra.Command{
+	var check bool
+	cmd := &cobra.Command{
 		Use:   "version",
-		Short: "Print bifu-cli version",
+		Short: "Print bifu-cli version (use --check to look for updates)",
 		Run: func(cmd *cobra.Command, args []string) {
 			fmt.Printf("bifu-cli %s\n", version)
+			if check {
+				reportUpdateStatus(os.Stdout)
+			}
 		},
 	}
+	cmd.Flags().BoolVar(&check, "check", false, "Check whether a newer release is available")
+	return cmd
 }

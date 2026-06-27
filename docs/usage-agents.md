@@ -119,7 +119,7 @@ bifu-cli config use dev             # 设为当前 profile
 ### 扫码登录(推荐)
 
 ```bash
-bifu-cli --profile dev auth login --device
+bifu-cli --profile prod auth login --device
 ```
 
 终端打印二维码 + 链接 → 用**已登录的 Bifu App** 扫码/打开链接批准 → cookie 自动落盘。
