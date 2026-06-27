@@ -109,7 +109,9 @@ func loadCtx() (*clifconfig.Profile, *output.Printer, error) {
 	// If --profile was explicitly set, switch to that profile
 	if globalProfile != "" {
 		if err := cfg.SetActive(globalProfile); err != nil {
-			fmt.Fprintf(os.Stderr, "warning: profile %q not found, using defaults\n", globalProfile)
+			fmt.Fprintf(os.Stderr,
+				"warning: profile %q does not exist — create it with: bifu-cli config init --profile %s --env <dev|staging|prod>\n",
+				globalProfile, globalProfile)
 			cfg.EnsureProfile(globalProfile)
 			cfg.ActiveProfile = globalProfile
 		}

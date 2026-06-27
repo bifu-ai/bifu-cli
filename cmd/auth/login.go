@@ -17,6 +17,17 @@ import (
 	"bifu-cli/internal/clifconfig"
 )
 
+// noBaseURLErr explains that the selected profile has no endpoint configured,
+// naming the profile and showing how to initialise it for the intended
+// environment — rather than hardcoding `--env dev`, which is misleading when
+// the user asked for another profile/env.
+func noBaseURLErr(name string) error {
+	if name == "" {
+		name = "default"
+	}
+	return fmt.Errorf("profile %q has no base_url — initialise it first:\n  bifu-cli config init --profile %s --env <dev|staging|prod>", name, name)
+}
+
 // newLoginCmd builds the `auth login` subcommand.
 func newLoginCmd(load LoadFn) *cobra.Command {
 	var username, password string
@@ -50,7 +61,7 @@ Backed by the existing scan-to-login endpoints
 			}
 			baseURL := profile.BaseURL
 			if baseURL == "" {
-				return fmt.Errorf("no base_url configured for this profile (run: bifu-cli config init --env dev)")
+				return noBaseURLErr(profile.Name)
 			}
 
 			// ── Step 0: collect credentials ──────────────────────────────────
@@ -198,7 +209,7 @@ func runDeviceLogin(load LoadFn) error {
 	}
 	baseURL := profile.BaseURL
 	if baseURL == "" {
-		return fmt.Errorf("no base_url configured for this profile (run: bifu-cli config init --env dev)")
+		return noBaseURLErr(profile.Name)
 	}
 	termType := profile.Auth.TerminalType
 	if termType == "" {
