@@ -4,11 +4,11 @@ package spot
 import (
 	"fmt"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
 
+	metaapi "bifu-cli/internal/api/meta"
 	spotapi "bifu-cli/internal/api/spot"
 	"bifu-cli/internal/clifconfig"
 	"bifu-cli/internal/output"
@@ -38,14 +38,27 @@ func NewSpotCmd(load LoadFn) *cobra.Command {
 	return cmd
 }
 
-func newclient(load LoadFn) (*spotapi.Client, *output.Printer, error) {
+func newclient(load LoadFn) (*spotapi.Client, *output.Printer, *clifconfig.Profile, error) {
 	p, pr, err := load()
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	c := spotapi.New(p)
 	c.SetVerbose(pr.Verbose)
-	return c, pr, nil
+	return c, pr, p, nil
+}
+
+// resolveSymbol turns a spot symbol name (e.g. "BTCUSDT") into its numeric
+// symbolId, printing the mapping. Empty and numeric values pass through.
+func resolveSymbol(p *clifconfig.Profile, pr *output.Printer, s string) (string, error) {
+	id, err := metaapi.ResolveSpotSymbol(p, pr.Verbose, s)
+	if err != nil {
+		return "", err
+	}
+	if s != "" && id != s {
+		pr.Line("%s", output.Dim(fmt.Sprintf("  %s → symbol %s", s, id)))
+	}
+	return id, nil
 }
 
 func newOrderCmd(load LoadFn) *cobra.Command {
@@ -69,17 +82,12 @@ func newOrderCreate(load LoadFn) *cobra.Command {
 			}
 			c := spotapi.New(p)
 			c.SetVerbose(pr.Verbose)
+			symbol, err = resolveSymbol(p, pr, symbol)
+			if err != nil {
+				return err
+			}
 			if clientID == "" {
-				uid := p.Auth.UserID
-				if uid == "" {
-					uid = "anon"
-				}
-				ts := time.Now().UTC().Format("20060102150405")
-				sym := strings.ToLower(symbol)
-				clientID = fmt.Sprintf("%s-%s-%s-%s", uid, sym, strings.ToLower(side), ts)
-				if len(clientID) > 64 {
-					clientID = clientID[:64]
-				}
+				clientID = p.GenerateClientOrderID(symbol, side, time.Now())
 			}
 			resp, err := c.CreateOrder(&spotapi.CreateOrderReq{
 				SymbolID:      symbol,
@@ -102,7 +110,7 @@ func newOrderCreate(load LoadFn) *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().StringVarP(&symbol, "symbol", "s", "", "Trading pair symbol")
+	cmd.Flags().StringVarP(&symbol, "symbol", "s", "", "Trading pair: symbol (BTCUSDT) or numeric symbolId")
 	cmd.Flags().StringVar(&side, "side", "", "BUY | SELL")
 	cmd.Flags().StringVar(&typ, "type", "MARKET", "MARKET | LIMIT | STOP_LIMIT")
 	cmd.Flags().StringVar(&price, "price", "0", "Limit price")
@@ -132,11 +140,15 @@ func newOrderCancel(load LoadFn) *cobra.Command {
 		Use:   "cancel",
 		Short: "Cancel a spot order (or all orders)",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			c, pr, err := newclient(load)
+			c, pr, p, err := newclient(load)
 			if err != nil {
 				return err
 			}
 			if all {
+				symbol, err = resolveSymbol(p, pr, symbol)
+				if err != nil {
+					return err
+				}
 				target := "all open spot orders"
 				if symbol != "" {
 					target += " for symbol " + symbol
@@ -163,7 +175,7 @@ func newOrderCancel(load LoadFn) *cobra.Command {
 	}
 	cmd.Flags().StringVar(&orderID, "order-id", "", "Order ID")
 	cmd.Flags().StringVar(&clientID, "client-id", "", "Client order ID")
-	cmd.Flags().StringVarP(&symbol, "symbol", "s", "", "Symbol (used with --all)")
+	cmd.Flags().StringVarP(&symbol, "symbol", "s", "", "Symbol (BTCUSDT) or symbolId (used with --all)")
 	cmd.Flags().BoolVar(&all, "all", false, "Cancel all open orders")
 	return cmd
 }
@@ -174,7 +186,7 @@ func newOrderGet(load LoadFn) *cobra.Command {
 		Use:   "get",
 		Short: "Get order details",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			c, pr, err := newclient(load)
+			c, pr, _, err := newclient(load)
 			if err != nil {
 				return err
 			}
@@ -209,7 +221,11 @@ func newOrderList(load LoadFn) *cobra.Command {
 		Use:   "list",
 		Short: "List open (or historical) spot orders",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			c, pr, err := newclient(load)
+			c, pr, p, err := newclient(load)
+			if err != nil {
+				return err
+			}
+			symbol, err = resolveSymbol(p, pr, symbol)
 			if err != nil {
 				return err
 			}
@@ -238,7 +254,7 @@ func newOrderList(load LoadFn) *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().StringVarP(&symbol, "symbol", "s", "", "Filter by symbol ID")
+	cmd.Flags().StringVarP(&symbol, "symbol", "s", "", "Filter by symbol (BTCUSDT) or symbolId")
 	cmd.Flags().BoolVar(&history, "history", false, "Show order history")
 	cmd.Flags().IntVar(&limit, "limit", 50, "Limit (history only)")
 	return cmd
@@ -249,7 +265,7 @@ func newBalanceCmd(load LoadFn) *cobra.Command {
 		Use:   "balance",
 		Short: "Show spot account balances",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			c, pr, err := newclient(load)
+			c, pr, _, err := newclient(load)
 			if err != nil {
 				return err
 			}
@@ -270,5 +286,3 @@ func newBalanceCmd(load LoadFn) *cobra.Command {
 		},
 	}
 }
-
-

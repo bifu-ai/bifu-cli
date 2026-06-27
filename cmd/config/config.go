@@ -94,18 +94,18 @@ func newGetCmd() *cobra.Command {
 
 func newSetCmd() *cobra.Command {
 	var (
-		profile      string
-		baseURL      string
-		webURL       string
-		wsURL        string
-		grpcSpot     string
-		grpcContract string
-		publicPath   string
-		privatePath  string
-		wsMarket     string
-		wsPrivate    string
+		profile       string
+		baseURL       string
+		webURL        string
+		wsURL         string
+		grpcSpot      string
+		grpcContract  string
+		publicPath    string
+		privatePath   string
+		wsMarket      string
+		wsPrivate     string
 		wsPrivateSpot string
-		httpTimeout  string
+		httpTimeout   string
 
 		// Auth
 		authCookie        string

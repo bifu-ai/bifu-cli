@@ -125,12 +125,16 @@ Backed by the existing scan-to-login endpoints
 				}
 			}
 
-			// ── Step 4: persist cookie to active profile ──────────────────────
+			// ── Step 4: persist cookie to the profile we logged in as ─────────
+			// Save to the profile resolved by load() (which honours --profile),
+			// not cfg.Active() — otherwise `--profile X auth login` would
+			// authenticate against X but write the cookie to the on-disk
+			// active profile.
 			cfg, err := clifconfig.Load()
 			if err != nil {
 				return fmt.Errorf("load config: %w", err)
 			}
-			p := cfg.Active()
+			p := cfg.EnsureProfile(profile.Name)
 			p.Auth.AuthCookie = cookieVal
 			if userID != "" {
 				p.Auth.UserID = userID
@@ -139,7 +143,7 @@ Backed by the existing scan-to-login endpoints
 				return fmt.Errorf("save config: %w", err)
 			}
 
-			fmt.Printf("✓ Logged in. Session cookie saved to profile %q\n", cfg.ActiveProfile)
+			fmt.Printf("✓ Logged in. Session cookie saved to profile %q\n", profile.Name)
 			if userID != "" {
 				fmt.Printf("  user_id : %s\n", userID)
 			}

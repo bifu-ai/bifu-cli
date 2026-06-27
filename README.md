@@ -206,7 +206,8 @@ bifu-cli spot balance
 bifu-cli spot balance -o json
 ```
 
-> `--symbol` 传的是**数值 symbolId**（不是 `BTCUSDT` 这种名称）。常用 dev 现货 symbolId：
+> `--symbol` 可传**符号名**（`BTCUSDT`、`BTC-USDT`）或**数值 symbolId**，符号名会经
+> `getMetaData` 自动解析并打印映射。常用 dev 现货 symbolId：
 > `90000001` = BTC-USDT、`90000002` = ETH-USDT、`90000004` = SOL-USDT、`90000010` = DOGE-USDT。
 > 完整列表见 `GET /api/v1/public/meta/getMetaData` 的 `symbolList`。
 
@@ -225,7 +226,7 @@ bifu-cli spot order create --symbol 90000002 --side BUY --size 0.1 --tif IMMEDIA
 
 | Flag | 说明 | 默认值 |
 |------|------|--------|
-| `--symbol` / `-s` | 数值 symbolId（必填，见 getMetaData） | — |
+| `--symbol` / `-s` | 符号名（`BTCUSDT`）或数值 symbolId（必填） | — |
 | `--side` | BUY / SELL（必填） | — |
 | `--size` | 数量，按 base 币计（必填） | — |
 | `--type` | MARKET / LIMIT / STOP_LIMIT | `MARKET` |
@@ -283,7 +284,8 @@ bifu-cli contract position --contract 10000001
 
 ### 下单
 
-> `--contract` 传的是**数值 contractId**（不是 `BTC-USDT-SWAP`）。dev 上 `10000001` = BTC 永续。
+> `--contract` 可传**符号名**（`BTCUSDT`、`BTC/USDT`）或**数值 contractId**,符号名会经
+> `getMetaData` 自动解析并打印映射。dev 上 `10000001` = BTC 永续（BTC/USDT）。
 > 仓位方向用 `--side LONG|SHORT`，下单方向用 `--order-side BUY|SELL`：开多=LONG+BUY，平多=LONG+SELL（加 `--reduce-only`），开空=SHORT+SELL，平空=SHORT+BUY。
 
 ```bash
@@ -562,17 +564,19 @@ bifu-cli ws config set --tradfi-ws wss://fxapi.bifu.dev/tradfi/ws
 
 ### 订阅市场行情
 
-Channel 格式使用 contractId（数字 ID），不是 symbol 名称。
+Channel 格式 `<type>.<idOrSymbol>[.<extra>]`,`<idOrSymbol>` 可填**符号名**或
+**数字 ID**;符号名会经 `getMetaData` 自动解析(`/`→合约、`-`→现货、无分隔→优先合约)。
 
 ```bash
 # 订阅所有合约 ticker
 bifu-cli ws market --channels ticker.all
 
-# 订阅单个合约（10000001 = BTC-USDT-SWAP）
+# 订阅单个合约(符号名或数字 ID 皆可,10000001 = BTC/USDT)
+bifu-cli ws market --channels ticker.BTCUSDT
 bifu-cli ws market --channels ticker.10000001
 
 # 多个 channels
-bifu-cli ws market --channels ticker.10000001,depth.10000001.15
+bifu-cli ws market --channels ticker.BTCUSDT,depth.SOLUSDT.15
 
 # 美化 JSON 输出
 bifu-cli ws market --channels ticker.all --pretty

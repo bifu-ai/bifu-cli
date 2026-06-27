@@ -78,7 +78,9 @@ type HTTPClient struct {
 // SetVerbose enables or disables HTTP request/response logging.
 func (c *HTTPClient) SetVerbose(v bool) { c.Verbose = v }
 
-// NewHTTPClient creates a client using the Spot credential set.
+// NewHTTPClient creates a profile-aware HTTP client. All authenticated
+// endpoints (spot / contract / payment / forex) share the same session-cookie
+// auth, so a single constructor serves every API client.
 func NewHTTPClient(profile *clifconfig.Profile) *HTTPClient {
 	timeout := profile.HTTPTimeout
 	if timeout == 0 {
@@ -89,11 +91,6 @@ func NewHTTPClient(profile *clifconfig.Profile) *HTTPClient {
 		profile: profile,
 		auth:    NewAuthManager(&profile.Auth),
 	}
-}
-
-// NewPaymentHTTPClient creates a client using cookie auth (payment/forex endpoints).
-func NewPaymentHTTPClient(profile *clifconfig.Profile) *HTTPClient {
-	return NewHTTPClient(profile)
 }
 
 // HTTPResponse wraps the raw HTTP response.

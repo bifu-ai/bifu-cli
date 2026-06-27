@@ -52,12 +52,12 @@ type Product struct {
 
 // Signal is the current signal window.
 type Signal struct {
-	ID        string `json:"id"`
-	Status    string `json:"status"`
-	Timezone  string `json:"timezone"`
-	StartDate string `json:"startDate"`
-	EndDate   string `json:"endDate"`
-	IsTodayUse bool  `json:"isTodayUse"`
+	ID         string `json:"id"`
+	Status     string `json:"status"`
+	Timezone   string `json:"timezone"`
+	StartDate  string `json:"startDate"`
+	EndDate    string `json:"endDate"`
+	IsTodayUse bool   `json:"isTodayUse"`
 }
 
 // SignalPolicy is an actual buy/sell call (entry / stop / targets).

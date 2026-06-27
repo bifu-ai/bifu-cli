@@ -46,7 +46,7 @@ type Client struct {
 // New creates a Payment API client.
 func New(profile *clifconfig.Profile) *Client {
 	return &Client{
-		http:    client.NewPaymentHTTPClient(profile),
+		http:    client.NewHTTPClient(profile),
 		profile: profile,
 	}
 }
@@ -98,7 +98,7 @@ type ForexAccountItem struct {
 	MarginLevel string `json:"marginLevel"`
 	Group       string `json:"group"`
 	GroupType   string `json:"groupType"`
-	MtType      int    `json:"mtType"`   // 1=MT4, 2=MT5, 3=TradFi(Fortex)
+	MtType      int    `json:"mtType"` // 1=MT4, 2=MT5, 3=TradFi(Fortex)
 	Currency    string `json:"currency"`
 	IsDefault   bool   `json:"isDefault"`
 	Enable      bool   `json:"enable"`
@@ -460,13 +460,13 @@ func (c *Client) Transfer(req *TransferReq) error {
 type TransferAccountType int32
 
 const (
-	TransferAccountTypeSaving          TransferAccountType = 1
-	TransferAccountTypeForexMT5        TransferAccountType = 2
-	TransferAccountTypeCryptoFunding   TransferAccountType = 5
-	TransferAccountTypeCryptoSpot      TransferAccountType = 6
-	TransferAccountTypeCryptoFuture    TransferAccountType = 7
-	TransferAccountTypeCopyTrading     TransferAccountType = 9
-	TransferAccountTypeEarn            TransferAccountType = 11
+	TransferAccountTypeSaving        TransferAccountType = 1
+	TransferAccountTypeForexMT5      TransferAccountType = 2
+	TransferAccountTypeCryptoFunding TransferAccountType = 5
+	TransferAccountTypeCryptoSpot    TransferAccountType = 6
+	TransferAccountTypeCryptoFuture  TransferAccountType = 7
+	TransferAccountTypeCopyTrading   TransferAccountType = 9
+	TransferAccountTypeEarn          TransferAccountType = 11
 )
 
 // UnifiedTransferReq is the request body for POST /payment/v2/transfer.

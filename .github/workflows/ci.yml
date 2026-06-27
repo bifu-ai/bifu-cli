@@ -18,6 +18,14 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+      - name: gofmt
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "::error::These files are not gofmt-formatted:"
+            echo "$unformatted"
+            exit 1
+          fi
       - name: Build
         run: go build ./...
       - name: Vet
@@ -41,4 +49,4 @@ jobs:
       - name: staticcheck
         run: |
           go install honnef.co/go/tools/cmd/staticcheck@latest
-          staticcheck ./... || true
+          staticcheck ./...

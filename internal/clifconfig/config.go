@@ -194,6 +194,27 @@ func (c *CLIConfig) EnsureProfile(name string) *Profile {
 	return p
 }
 
+// maxClientOrderIDLen bounds generated client order IDs (exchange limit).
+const maxClientOrderIDLen = 64
+
+// GenerateClientOrderID builds a deterministic-ish client order ID of the form
+// "<userID>-<symbol>-<side>-<UTCtimestamp>", truncated to the exchange's 64-char
+// limit. It is shared by the spot and contract order commands so the format and
+// length rule stay in one place. The timestamp is passed in (rather than read
+// from the clock) to keep the function pure and testable.
+func (p *Profile) GenerateClientOrderID(symbol, side string, ts time.Time) string {
+	uid := p.Auth.UserID
+	if uid == "" {
+		uid = "anon"
+	}
+	id := fmt.Sprintf("%s-%s-%s-%s",
+		uid, strings.ToLower(symbol), strings.ToLower(side), ts.UTC().Format("20060102150405"))
+	if len(id) > maxClientOrderIDLen {
+		id = id[:maxClientOrderIDLen]
+	}
+	return id
+}
+
 // ── Derived helpers used by API clients ───────────────────────────────────────
 
 // GetPublicURL builds a full URL for a public path.

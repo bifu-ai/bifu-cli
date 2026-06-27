@@ -36,6 +36,7 @@ type WSClient struct {
 	cookie    string
 	messages  chan []byte
 	done      chan struct{}
+	closeOnce sync.Once
 	connected bool
 }
 
@@ -184,21 +185,31 @@ func (c *WSClient) Messages() <-chan []byte {
 	return c.messages
 }
 
-// Close terminates the connection.
+// Close terminates the connection. It is safe to call more than once and from
+// multiple goroutines — only the first call has any effect.
 func (c *WSClient) Close() {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	close(c.done)
-	if c.conn != nil {
-		_ = c.conn.WriteMessage(websocket.CloseMessage,
-			websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
-		c.conn.Close()
-		c.connected = false
-	}
+	c.closeOnce.Do(func() {
+		c.mu.Lock()
+		defer c.mu.Unlock()
+		close(c.done)
+		if c.conn != nil {
+			_ = c.conn.WriteMessage(websocket.CloseMessage,
+				websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
+			c.conn.Close()
+			c.connected = false
+		}
+	})
 }
 
 // URL returns the connected WebSocket URL.
 func (c *WSClient) URL() string { return c.url }
+
+// Connected reports whether the connection is currently open.
+func (c *WSClient) Connected() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.connected
+}
 
 func (c *WSClient) readLoop() {
 	for {

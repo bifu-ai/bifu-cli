@@ -1,0 +1,27 @@
+---
+description: Stream private trading events (contract/spot) and forex push quotes over WebSocket.
+alwaysApply: false
+---
+
+# bifu-cli: private & forex push streams
+
+Activate to stream the user's own trading events (orders/fills/positions) and
+forex push-gateway quotes. Requires a logged-in profile (bifu-auth). For public
+market data, use bifu-market-stream.
+
+```bash
+bifu-cli ws private          # contract private trading events
+bifu-cli ws private --spot   # spot private trading events
+bifu-cli ws pushgw           # MT5 push-gateway forex quotes
+```
+
+## Endpoints
+
+```bash
+bifu-cli ws config show
+bifu-cli ws config set --private-url wss://contract.bifu.dev/api/v1/private/contract/ws
+```
+
+## Notes
+- The private streams send the session cookie automatically from the active profile.
+- Runs until Ctrl-C; `-o json` for raw frames.

@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 
 	contractapi "bifu-cli/internal/api/contract"
+	metaapi "bifu-cli/internal/api/meta"
 	"bifu-cli/internal/clifconfig"
 	"bifu-cli/internal/output"
 )
@@ -39,14 +40,27 @@ func NewContractCmd(load LoadFn) *cobra.Command {
 	return cmd
 }
 
-func newClient(load LoadFn) (*contractapi.Client, *output.Printer, error) {
+func newClient(load LoadFn) (*contractapi.Client, *output.Printer, *clifconfig.Profile, error) {
 	p, pr, err := load()
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	c := contractapi.New(p)
 	c.SetVerbose(pr.Verbose)
-	return c, pr, nil
+	return c, pr, p, nil
+}
+
+// resolveContract turns a contract name (e.g. "BTCUSDT") into its numeric
+// contractId, printing the mapping. Empty and numeric values pass through.
+func resolveContract(p *clifconfig.Profile, pr *output.Printer, s string) (string, error) {
+	id, err := metaapi.ResolveContractSymbol(p, pr.Verbose, s)
+	if err != nil {
+		return "", err
+	}
+	if s != "" && id != s {
+		pr.Line("%s", output.Dim(fmt.Sprintf("  %s → contract %s", s, id)))
+	}
+	return id, nil
 }
 
 // ── contract order ────────────────────────────────────────────────────────────
@@ -80,18 +94,12 @@ func newOrderCreate(load LoadFn) *cobra.Command {
 			}
 			c := contractapi.New(p)
 			c.SetVerbose(pr.Verbose)
+			contractID, err = resolveContract(p, pr, contractID)
+			if err != nil {
+				return err
+			}
 			if clientID == "" {
-				uid := p.Auth.UserID
-				if uid == "" {
-					uid = "anon"
-				}
-				ts := time.Now().UTC().Format("20060102150405")
-				ctr := strings.ToLower(contractID)
-				side := strings.ToLower(orderSide)
-				clientID = fmt.Sprintf("%s-%s-%s-%s", uid, ctr, side, ts)
-				if len(clientID) > 64 {
-					clientID = clientID[:64]
-				}
+				clientID = p.GenerateClientOrderID(contractID, orderSide, time.Now())
 			}
 			resp, err := c.CreateOrder(&contractapi.CreateOrderReq{
 				ContractID:       strings.ToUpper(contractID),
@@ -120,7 +128,7 @@ func newOrderCreate(load LoadFn) *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&contractID, "contract", "", "Contract ID (e.g. BTCUSDT)")
+	cmd.Flags().StringVar(&contractID, "contract", "", "Contract: symbol (BTCUSDT) or numeric contractId")
 	cmd.Flags().StringVar(&positionSide, "side", "", "Position side: LONG | SHORT")
 	cmd.Flags().StringVar(&orderSide, "order-side", "", "Order side: BUY | SELL")
 	cmd.Flags().StringVar(&typ, "type", "MARKET", "MARKET | LIMIT | STOP_LIMIT")
@@ -155,11 +163,15 @@ func newOrderCancel(load LoadFn) *cobra.Command {
 		Use:   "cancel",
 		Short: "Cancel contract order(s)",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			c, pr, err := newClient(load)
+			c, pr, p, err := newClient(load)
 			if err != nil {
 				return err
 			}
 			if all {
+				contractID, err = resolveContract(p, pr, contractID)
+				if err != nil {
+					return err
+				}
 				target := "all open contract orders"
 				if contractID != "" {
 					target += " for contract " + contractID
@@ -183,7 +195,7 @@ func newOrderCancel(load LoadFn) *cobra.Command {
 	}
 	cmd.Flags().StringVar(&orderID, "order-id", "", "Order ID")
 	cmd.Flags().StringVar(&clientID, "client-id", "", "Client order ID")
-	cmd.Flags().StringVar(&contractID, "contract", "", "Cancel all orders for contract")
+	cmd.Flags().StringVar(&contractID, "contract", "", "Cancel all orders for contract: symbol (BTCUSDT) or contractId")
 	cmd.Flags().BoolVar(&all, "all", false, "Cancel all open orders")
 	return cmd
 }
@@ -194,7 +206,7 @@ func newOrderGet(load LoadFn) *cobra.Command {
 		Use:   "get",
 		Short: "Get contract order details",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			c, pr, err := newClient(load)
+			c, pr, _, err := newClient(load)
 			if err != nil {
 				return err
 			}
@@ -231,7 +243,11 @@ func newOrderList(load LoadFn) *cobra.Command {
 		Use:   "list",
 		Short: "List open (or historical) contract orders",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			c, pr, err := newClient(load)
+			c, pr, p, err := newClient(load)
+			if err != nil {
+				return err
+			}
+			contractID, err = resolveContract(p, pr, contractID)
 			if err != nil {
 				return err
 			}
@@ -266,7 +282,7 @@ func newOrderList(load LoadFn) *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&contractID, "contract", "", "Filter by contract ID")
+	cmd.Flags().StringVar(&contractID, "contract", "", "Filter by contract: symbol (BTCUSDT) or contractId")
 	cmd.Flags().BoolVar(&history, "history", false, "Show order history")
 	cmd.Flags().IntVar(&limit, "limit", 50, "Limit (history only)")
 	return cmd
@@ -280,7 +296,11 @@ func newPositionCmd(load LoadFn) *cobra.Command {
 		Use:   "position",
 		Short: "View open positions",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			c, pr, err := newClient(load)
+			c, pr, p, err := newClient(load)
+			if err != nil {
+				return err
+			}
+			contractID, err = resolveContract(p, pr, contractID)
 			if err != nil {
 				return err
 			}
@@ -305,12 +325,15 @@ func newPositionCmd(load LoadFn) *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&contractID, "contract", "", "Filter by contract ID")
-	cmd.AddCommand(&cobra.Command{
+	cmd.Flags().StringVar(&contractID, "contract", "", "Filter by contract: symbol (BTCUSDT) or contractId")
+	listCmd := &cobra.Command{
 		Use:   "list",
 		Short: "List open positions",
 		RunE:  cmd.RunE,
-	})
+	}
+	// Bind the same var so `position list --contract X` works like `position --contract X`.
+	listCmd.Flags().StringVar(&contractID, "contract", "", "Filter by contract: symbol (BTCUSDT) or contractId")
+	cmd.AddCommand(listCmd)
 	return cmd
 }
 
@@ -321,7 +344,7 @@ func newAccountCmd(load LoadFn) *cobra.Command {
 		Use:   "account",
 		Short: "Show contract account summary",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			c, pr, err := newClient(load)
+			c, pr, _, err := newClient(load)
 			if err != nil {
 				return err
 			}

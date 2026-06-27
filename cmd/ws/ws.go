@@ -7,12 +7,14 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
 
 	"github.com/spf13/cobra"
 
+	metaapi "bifu-cli/internal/api/meta"
 	wsclient "bifu-cli/internal/client"
 	"bifu-cli/internal/clifconfig"
 	"bifu-cli/internal/output"
@@ -31,7 +33,7 @@ func NewWSCmd(load LoadFn) *cobra.Command {
 Config subcommand manages WebSocket endpoints stored in the active profile.
 
   bifu-cli ws config set --market-url wss://api.bifu.dev --private-url wss://api.bifu.dev
-  bifu-cli ws market --channels ticker.BTCUSDT,depth.BTCUSDT
+  bifu-cli ws market --channels ticker.BTCUSDT,depth.SOLUSDT.15
   bifu-cli ws private
   bifu-cli ws private --spot
   bifu-cli ws pushgw`,
@@ -147,17 +149,25 @@ func newWSMarketCmd(load LoadFn) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "market",
 		Short: "Subscribe to public market data stream",
-		Example: `  bifu-cli ws market --channels ticker.10000001
+		Example: `  bifu-cli ws market --channels ticker.BTCUSDT          # symbol, auto-resolved
+  bifu-cli ws market --channels ticker.10000001         # numeric instrumentId
   bifu-cli ws market --channels ticker.all
-  bifu-cli ws market --channels ticker.10000001,depth.10000001.15 --pretty`,
+  bifu-cli ws market --channels ticker.BTCUSDT,depth.SOLUSDT.15 --pretty`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			p, pr, err := load()
 			if err != nil {
 				return err
 			}
+			resolved, notes, err := resolveMarketChannels(channels, p, pr.Verbose)
+			if err != nil {
+				return err
+			}
 			url := p.GetWSMarketURL()
 			pr.Header("Market WebSocket: " + url)
-			pr.Line("Channels: %s", strings.Join(channels, ", "))
+			pr.Line("Channels: %s", strings.Join(resolved, ", "))
+			for _, n := range notes {
+				pr.Line("%s", output.Dim("  "+n))
+			}
 			pr.Line("Press Ctrl+C to stop\n")
 
 			ws := wsclient.NewWSMarketClient(p)
@@ -166,16 +176,73 @@ func newWSMarketCmd(load LoadFn) *cobra.Command {
 			}
 			defer ws.Close()
 
-			if err := ws.Subscribe(channels...); err != nil {
+			if err := ws.Subscribe(resolved...); err != nil {
 				return err
 			}
 			return streamMarketMessages(ws, pr, pretty)
 		},
 	}
-	cmd.Flags().StringSliceVar(&channels, "channels", nil, "Channel(s) to subscribe (e.g. ticker.10000001, ticker.all, depth.10000001.15)")
+	cmd.Flags().StringSliceVar(&channels, "channels", nil, "Channel(s): symbol or numeric ID (e.g. ticker.BTCUSDT, ticker.10000001, ticker.all, depth.BTCUSDT.15)")
 	cmd.Flags().BoolVar(&pretty, "pretty", false, "Pretty-print JSON messages")
 	_ = cmd.MarkFlagRequired("channels")
 	return cmd
+}
+
+// channelIsResolved reports whether a channel's id token is already a numeric
+// instrument ID or the "all" wildcard (so it needs no symbol lookup).
+func channelIsResolved(idToken string) bool {
+	if strings.EqualFold(idToken, "all") {
+		return true
+	}
+	_, err := strconv.Atoi(idToken)
+	return err == nil
+}
+
+// resolveMarketChannels rewrites symbol-named channels (e.g. "ticker.BTCUSDT")
+// to numeric-ID channels ("ticker.10000001"), leaving numeric IDs and "all"
+// untouched. Channel grammar is "<type>.<idOrSymbol>[.<extra>]" — only the id
+// token is resolved, preserving suffixes like depth levels. Metadata is fetched
+// only when at least one channel actually needs resolving, so numeric-only usage
+// stays network-free. It returns the rewritten channels plus human-readable
+// "ticker.BTCUSDT → ticker.10000001 (contract BTC/USDT)" notes.
+func resolveMarketChannels(channels []string, p *clifconfig.Profile, verbose bool) (resolved, notes []string, err error) {
+	needs := false
+	for _, ch := range channels {
+		parts := strings.SplitN(ch, ".", 3)
+		if len(parts) >= 2 && !channelIsResolved(parts[1]) {
+			needs = true
+			break
+		}
+	}
+	if !needs {
+		return channels, nil, nil
+	}
+
+	mc := metaapi.New(p)
+	mc.SetVerbose(verbose)
+	m, err := mc.Load()
+	if err != nil {
+		return nil, nil, fmt.Errorf("resolve symbols: %w", err)
+	}
+
+	resolved = make([]string, 0, len(channels))
+	for _, ch := range channels {
+		parts := strings.SplitN(ch, ".", 3)
+		if len(parts) < 2 || channelIsResolved(parts[1]) {
+			resolved = append(resolved, ch)
+			continue
+		}
+		id, name, kind, rerr := m.ResolveMarket(parts[1])
+		if rerr != nil {
+			return nil, nil, rerr
+		}
+		original := ch
+		parts[1] = id
+		ch = strings.Join(parts, ".")
+		notes = append(notes, fmt.Sprintf("%s → %s (%s %s)", original, ch, kind, name))
+		resolved = append(resolved, ch)
+	}
+	return resolved, notes, nil
 }
 
 // ── ws private ────────────────────────────────────────────────────────────────

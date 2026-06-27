@@ -136,8 +136,9 @@ echo 123456 | bifu-cli --profile dev auth login --username you@example.com --pas
 ## 4. 常用命令
 
 > 所有命令都可加 `-p/--profile <env>` 指定环境、`-o json`/`--json` 输出 JSON、
-> `-v` 调试。`--symbol`(现货 symbolId)、`--contract`(合约 contractId)是**数值 id**,
-> 不是 `BTCUSDT` 这种名称。
+> `-v` 调试。`--symbol`(现货)、`--contract`(合约)既可填**符号名**(`BTCUSDT`、
+> `BTC/USDT`、`BTC-USDT`)也可填**数值 id**,符号名会经 `getMetaData` 自动解析并打印映射。
+> 消歧:`/`→合约、`-`→现货、无分隔→优先合约。
 
 ### 4.1 余额 / 账户(只读)
 
@@ -163,8 +164,8 @@ Total Balance
 ### 4.2 现货交易(spot)
 
 ```bash
-# 下单:--symbol/--side/--size 必填
-bifu-cli spot order create --symbol 90000001 --side BUY --size 0.0001                 # 市价
+# 下单:--symbol/--side/--size 必填(--symbol 可用符号名或数值 id)
+bifu-cli spot order create --symbol BTCUSDT --side BUY --size 0.0001                  # 市价(符号名)
 bifu-cli spot order create --symbol 90000001 --side SELL --type LIMIT --price 100000 --size 0.001
 #   --type   MARKET | LIMIT | STOP_LIMIT      (默认 MARKET)
 #   --price  限价价格 (默认 0)                  --tif GOOD_TIL_CANCEL|IMMEDIATE_OR_CANCEL|FILL_OR_KILL
@@ -243,8 +244,11 @@ bifu-cli orion subscription                   # 当前订阅状态/有效期
 ### 4.6 WebSocket 实时(`ws`,Ctrl-C 结束)
 
 ```bash
-bifu-cli ws market --channels ticker.BTCUSDT             # 公共行情(无需登录)
-bifu-cli ws market --channels ticker.BTCUSDT,depth.BTCUSDT
+bifu-cli ws market --channels ticker.BTCUSDT             # 公共行情(无需登录;符号自动解析为数字 ID)
+bifu-cli ws market --channels ticker.10000001            # 也可直接用数字 instrumentId
+bifu-cli ws market --channels ticker.all                 # 全部 ticker
+bifu-cli ws market --channels ticker.BTCUSDT,depth.SOLUSDT.15
+# 符号消歧:BTC/USDT→合约, BTC-USDT→现货, BTCUSDT(无分隔)→优先合约
 bifu-cli ws pushgw                                       # MT5 外汇推送
 bifu-cli ws config show                                  # 查看各 WS 端点 URL
 ```
@@ -273,5 +277,3 @@ bifu-cli ws config show                                  # 查看各 WS 端点 U
 
 - 会话 cookie 存于 `~/.bifu-cli/config.yaml`(0600),**不会回显到终端**,`-v` 日志自动脱敏。
 - 无任何本地生成 cookie 的命令;统一走 `auth login` 真实登录。
-
-更多见仓库 `README.md`。

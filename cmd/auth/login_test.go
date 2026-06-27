@@ -14,14 +14,68 @@ import (
 
 func TestExtractCookieValue(t *testing.T) {
 	cases := map[string]string{
-		`{"Name":"user_auth_name","Value":"abc123=="}`: "abc123==",         // JSON http.Cookie
-		`rawCookieValue==`:                             "rawCookieValue==", // not JSON → as-is
-		``:                                             "",
+		`{"Name":"user_auth_name","Value":"abc123=="}`: "abc123==", // JSON http.Cookie
+		`rawCookieValue==`: "rawCookieValue==", // not JSON → as-is
+		``:                 "",
 	}
 	for in, want := range cases {
 		if got := extractCookieValue(in); got != want {
 			t.Errorf("extractCookieValue(%q) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+// TestEmailLoginSavesToResolvedProfile verifies that `auth login` writes the
+// session cookie to the profile resolved by load() (i.e. the one --profile
+// selected) and NOT to the on-disk active profile. Regression test for a bug
+// where logging in with --profile dev authenticated against dev but saved the
+// cookie to the active "default" profile.
+func TestEmailLoginSavesToResolvedProfile(t *testing.T) {
+	// Mock backend returns a cookie inline (no 2FA) so no stdin is read.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/user/login" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"retCode": "0",
+			"result": map[string]any{
+				"cookieStr": `{"Name":"user_auth_name","Value":"DEVcookie=="}`,
+				"user":      map[string]any{"userId": "42"},
+			},
+		})
+	}))
+	defer srv.Close()
+
+	// Config has two profiles; active is "default", but we log in as "dev".
+	t.Setenv("BIFU_CLI_HOME", t.TempDir())
+	cfg, _ := clifconfig.Load()
+	cfg.EnsureProfile("default")
+	dev := cfg.EnsureProfile("dev")
+	dev.BaseURL = srv.URL
+	if err := cfg.Save(); err != nil {
+		t.Fatalf("save config: %v", err)
+	}
+
+	// load() simulates `--profile dev`: it returns the dev profile.
+	load := func() (*clifconfig.Profile, *output.Printer, error) {
+		c, _ := clifconfig.Load()
+		return c.Profiles["dev"], output.NewPrinter(output.FormatPlain, false), nil
+	}
+
+	cmd := newLoginCmd(load)
+	cmd.SetArgs([]string{"--username", "user@example.com", "--password", "secret"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("login: %v", err)
+	}
+
+	got, _ := clifconfig.Load()
+	if c := got.Profiles["dev"].Auth.AuthCookie; c != "DEVcookie==" {
+		t.Errorf("dev cookie = %q, want %q", c, "DEVcookie==")
+	}
+	if c := got.Profiles["default"].Auth.AuthCookie; c != "" {
+		t.Errorf("default cookie = %q, want empty (cookie leaked to wrong profile)", c)
 	}
 }
 
