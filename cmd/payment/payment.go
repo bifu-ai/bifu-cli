@@ -59,11 +59,16 @@ func newBalanceCmd(load LoadFn) *cobra.Command {
 					return err
 				}
 				pr.Header("Total Balance")
+				fmtBreakdown := func(b paymentapi.BalanceBreakdown) string {
+					return b.Balance + " (" + b.Ratio + "%)"
+				}
 				pr.PrintKV([]output.KV{
 					{Key: "Total (USD)", Value: res.Balance},
-					{Key: "Saving", Value: res.Saving.Balance + " (" + res.Saving.Ratio + "%)"},
-					{Key: "Forex", Value: res.Forex.Balance + " (" + res.Forex.Ratio + "%)"},
-					{Key: "CopyTrade", Value: res.CopyTrade.Balance + " (" + res.CopyTrade.Ratio + "%)"},
+					{Key: "Saving", Value: fmtBreakdown(res.Saving)},
+					{Key: "Forex", Value: fmtBreakdown(res.Forex)},
+					{Key: "CopyTrade", Value: fmtBreakdown(res.CopyTrade)},
+					{Key: "TrialBonus", Value: fmtBreakdown(res.TrialBonus)},
+					{Key: "RWA", Value: fmtBreakdown(res.Rwa)},
 				})
 				return nil
 			}

@@ -74,9 +74,11 @@ type TotalBalanceResult struct {
 	Currency struct {
 		Code string `json:"code"`
 	} `json:"currency"`
-	Saving    BalanceBreakdown `json:"saving"`
-	Forex     BalanceBreakdown `json:"forex"`
-	CopyTrade BalanceBreakdown `json:"copyTrade"`
+	Saving     BalanceBreakdown `json:"saving"`
+	Forex      BalanceBreakdown `json:"forex"`
+	CopyTrade  BalanceBreakdown `json:"copyTrade"`
+	TrialBonus BalanceBreakdown `json:"trialBonus"`
+	Rwa        BalanceBreakdown `json:"rwa"`
 }
 
 type BalanceBreakdown struct {
