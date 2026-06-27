@@ -29,15 +29,16 @@ const (
 
 // WSClient manages a single WebSocket connection with an auto-ping keepalive.
 type WSClient struct {
-	mu        sync.Mutex
-	conn      *websocket.Conn
-	profile   *clifconfig.Profile
-	url       string
-	cookie    string
-	messages  chan []byte
-	done      chan struct{}
-	closeOnce sync.Once
-	connected bool
+	mu         sync.Mutex
+	conn       *websocket.Conn
+	profile    *clifconfig.Profile
+	url        string
+	cookie     string
+	cookieName string
+	messages   chan []byte
+	done       chan struct{}
+	closeOnce  sync.Once
+	connected  bool
 }
 
 // NewWSClient creates a client pointed at the given full URL.
@@ -59,6 +60,7 @@ func NewWSMarketClient(profile *clifconfig.Profile) *WSClient {
 func NewWSPrivateClient(profile *clifconfig.Profile) *WSClient {
 	c := NewWSClient(profile, profile.GetWSPrivateURL())
 	c.cookie = profile.Auth.AuthCookie
+	c.cookieName = profile.Auth.AuthCookieName
 	return c
 }
 
@@ -66,6 +68,7 @@ func NewWSPrivateClient(profile *clifconfig.Profile) *WSClient {
 func NewWSPrivateSpotClient(profile *clifconfig.Profile) *WSClient {
 	c := NewWSClient(profile, profile.GetWSPrivateSpotURL())
 	c.cookie = profile.Auth.AuthCookie
+	c.cookieName = profile.Auth.AuthCookieName
 	return c
 }
 
@@ -93,7 +96,7 @@ func (c *WSClient) Connect() error {
 	var headers http.Header
 	if c.cookie != "" {
 		headers = http.Header{}
-		headers.Set("Cookie", "user_auth_name="+c.cookie)
+		headers.Set("Cookie", c.cookieName+"="+c.cookie)
 	}
 
 	conn, _, err := dialer.Dial(c.url, headers)

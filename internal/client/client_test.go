@@ -127,7 +127,7 @@ func TestParsePaymentResponse(t *testing.T) {
 func newTestClient(baseURL string) *HTTPClient {
 	return NewHTTPClient(&clifconfig.Profile{
 		BaseURL: baseURL,
-		Auth:    clifconfig.AuthProfile{AuthCookie: "test-cookie"},
+		Auth:    clifconfig.AuthProfile{AuthCookie: "test-cookie", AuthCookieName: "user_auth_name"},
 	})
 }
 

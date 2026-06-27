@@ -105,19 +105,11 @@ Backed by the existing scan-to-login endpoints
 				return fmt.Errorf("login failed: %w", err)
 			}
 
-			var cookieVal, userID string
+			var cookieName, cookieVal, userID string
 
 			// If issueID has COOKIE: prefix, no 2FA needed — cookie is inline (JSON-encoded)
 			if strings.HasPrefix(issueID, "COOKIE:") {
-				raw := strings.TrimPrefix(issueID, "COOKIE:")
-				var ck struct {
-					Value string `json:"Value"`
-				}
-				if err := json.Unmarshal([]byte(raw), &ck); err == nil && ck.Value != "" {
-					cookieVal = ck.Value
-				} else {
-					cookieVal = raw
-				}
+				cookieName, cookieVal = extractCookie(strings.TrimPrefix(issueID, "COOKIE:"))
 			} else {
 				fmt.Println("✓ Password accepted, verification code sent to email")
 
@@ -130,7 +122,7 @@ Backed by the existing scan-to-login endpoints
 				}
 
 				// ── Step 3: POST /user/login_check ────────────────────────────────
-				cookieVal, userID, err = doLoginCheck(baseURL, issueID, code, termType)
+				cookieName, cookieVal, userID, err = doLoginCheck(baseURL, issueID, code, termType)
 				if err != nil {
 					return fmt.Errorf("verification failed: %w", err)
 				}
@@ -147,6 +139,7 @@ Backed by the existing scan-to-login endpoints
 			}
 			p := cfg.EnsureProfile(profile.Name)
 			p.Auth.AuthCookie = cookieVal
+			p.Auth.AuthCookieName = cookieName
 			if userID != "" {
 				p.Auth.UserID = userID
 			}
@@ -247,7 +240,7 @@ func runDeviceLogin(load LoadFn) error {
 		}
 		time.Sleep(devicePollInterval)
 
-		status, cookieVal, userID, err := qrCodeCheck(baseURL, issueID, termType)
+		status, cookieName, cookieVal, userID, err := qrCodeCheck(baseURL, issueID, termType)
 		if err != nil {
 			return fmt.Errorf("login status check failed: %w", err)
 		}
@@ -259,6 +252,7 @@ func runDeviceLogin(load LoadFn) error {
 			}
 			p := cfg.EnsureProfile(profile.Name)
 			p.Auth.AuthCookie = cookieVal
+			p.Auth.AuthCookieName = cookieName
 			if userID != "" {
 				p.Auth.UserID = userID
 			}
@@ -312,11 +306,11 @@ func qrCodeGet(baseURL, terminalType string) (issueID, url string, err error) {
 
 // qrCodeCheck makes one poll. status is one of:
 // pending | processing | refused | expired | success.
-func qrCodeCheck(baseURL, issueID, terminalType string) (status, cookieVal, userID string, err error) {
+func qrCodeCheck(baseURL, issueID, terminalType string) (status, cookieName, cookieVal, userID string, err error) {
 	body, _ := json.Marshal(map[string]string{"issueId": issueID})
 	req, err := http.NewRequest("POST", baseURL+"/user/login/qr_code_check", bytes.NewReader(body))
 	if err != nil {
-		return "", "", "", err
+		return "", "", "", "", err
 	}
 	req.Header.Set("Content-Type", "application/json")
 	setLoginHeaders(req, terminalType)
@@ -324,21 +318,22 @@ func qrCodeCheck(baseURL, issueID, terminalType string) (status, cookieVal, user
 	c := &http.Client{Timeout: 30 * time.Second}
 	resp, err := c.Do(req)
 	if err != nil {
-		return "", "", "", err
+		return "", "", "", "", err
 	}
 	defer resp.Body.Close()
 
 	var out qrCheckResp
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
-		return "", "", "", fmt.Errorf("decode response: %w", err)
+		return "", "", "", "", fmt.Errorf("decode response: %w", err)
 	}
 	if out.RetCode != "0" {
-		return "", "", "", fmt.Errorf("[%s] %s", out.RetCode, out.RetMsg)
+		return "", "", "", "", fmt.Errorf("[%s] %s", out.RetCode, out.RetMsg)
 	}
 	if out.Result.IssueStatus == "success" {
-		return "success", extractCookieValue(out.Result.CookieStr), out.Result.User.UserID, nil
+		name, val := extractCookie(out.Result.CookieStr)
+		return "success", name, val, out.Result.User.UserID, nil
 	}
-	return out.Result.IssueStatus, "", "", nil
+	return out.Result.IssueStatus, "", "", "", nil
 }
 
 func setLoginHeaders(req *http.Request, terminalType string) {
@@ -347,20 +342,23 @@ func setLoginHeaders(req *http.Request, terminalType string) {
 	req.Header.Set("appVersion", "1.0.0")
 }
 
-// extractCookieValue pulls the bare cookie value from a backend cookieStr, which
-// is a JSON-serialised http.Cookie ({"Value":"..."}). Falls back to the raw
-// string when it is not JSON.
-func extractCookieValue(cookieStr string) string {
+// extractCookie pulls the cookie name and value from a backend cookieStr, which
+// is a JSON-serialised http.Cookie ({"Name":"...","Value":"..."}). The name is
+// environment-specific (dev=user_auth_name, staging/prod differ), so it must be
+// preserved and sent under that exact name. Falls back to treating the whole
+// string as the value (under the dev/local name) when it is not JSON.
+func extractCookie(cookieStr string) (name, value string) {
 	if cookieStr == "" {
-		return ""
+		return "", ""
 	}
 	var ck struct {
+		Name  string `json:"Name"`
 		Value string `json:"Value"`
 	}
 	if err := json.Unmarshal([]byte(cookieStr), &ck); err == nil && ck.Value != "" {
-		return ck.Value
+		return ck.Name, ck.Value
 	}
-	return cookieStr
+	return "user_auth_name", cookieStr
 }
 
 // devicePollInterval is how long the CLI waits between approval polls. It is a
@@ -440,14 +438,14 @@ type loginCheckResp struct {
 	} `json:"result"`
 }
 
-func doLoginCheck(baseURL, issueID, code, terminalType string) (cookieVal, userID string, err error) {
+func doLoginCheck(baseURL, issueID, code, terminalType string) (cookieName, cookieVal, userID string, err error) {
 	body, _ := json.Marshal(loginCheckReq{
 		IssueID: issueID,
 		Code:    code,
 	})
 	req, err := http.NewRequest("POST", baseURL+"/user/login_check", bytes.NewReader(body))
 	if err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("terminalType", terminalType)
@@ -457,36 +455,30 @@ func doLoginCheck(baseURL, issueID, code, terminalType string) (cookieVal, userI
 	c := &http.Client{Timeout: 30 * time.Second}
 	resp, err := c.Do(req)
 	if err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
 	defer resp.Body.Close()
 
 	var out loginCheckResp
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
-		return "", "", fmt.Errorf("decode response: %w", err)
+		return "", "", "", fmt.Errorf("decode response: %w", err)
 	}
 	if out.RetCode != "0" {
-		return "", "", fmt.Errorf("[%s] %s", out.RetCode, out.RetMsg)
+		return "", "", "", fmt.Errorf("[%s] %s", out.RetCode, out.RetMsg)
 	}
 
 	uid := out.Result.User.UID
 
-	// cookieStr is a JSON-serialised http.Cookie — extract Value
+	// cookieStr is a JSON-serialised http.Cookie — preserve name + value.
 	if out.Result.CookieStr != "" {
-		var ck struct {
-			Value string `json:"Value"`
-		}
-		if err := json.Unmarshal([]byte(out.Result.CookieStr), &ck); err == nil && ck.Value != "" {
-			return ck.Value, uid, nil
-		}
-		// If not JSON or Value empty, use raw string as-is
-		return out.Result.CookieStr, uid, nil
+		name, val := extractCookie(out.Result.CookieStr)
+		return name, val, uid, nil
 	}
-	// Fallback: check Set-Cookie header
+	// Fallback: take the session cookie from the Set-Cookie header.
 	for _, ck := range resp.Cookies() {
-		if ck.Name == "user_auth_name" {
-			return ck.Value, uid, nil
+		if ck.Value != "" {
+			return ck.Name, ck.Value, uid, nil
 		}
 	}
-	return "", uid, fmt.Errorf("no cookie returned in response")
+	return "", "", uid, fmt.Errorf("no cookie returned in response")
 }

@@ -12,15 +12,23 @@ import (
 	"bifu-cli/internal/output"
 )
 
-func TestExtractCookieValue(t *testing.T) {
-	cases := map[string]string{
-		`{"Name":"user_auth_name","Value":"abc123=="}`: "abc123==", // JSON http.Cookie
-		`rawCookieValue==`: "rawCookieValue==", // not JSON → as-is
-		``:                 "",
+func TestExtractCookie(t *testing.T) {
+	cases := []struct {
+		in        string
+		wantName  string
+		wantValue string
+	}{
+		// JSON http.Cookie — name is preserved (prod uses a non-default name).
+		{`{"Name":"929a528c9d53c705","Value":"abc123=="}`, "929a528c9d53c705", "abc123=="},
+		{`{"Name":"user_auth_name","Value":"dev=="}`, "user_auth_name", "dev=="},
+		// Not JSON → treated as a raw value under the dev/local default name.
+		{`rawCookieValue==`, "user_auth_name", "rawCookieValue=="},
+		{``, "", ""},
 	}
-	for in, want := range cases {
-		if got := extractCookieValue(in); got != want {
-			t.Errorf("extractCookieValue(%q) = %q, want %q", in, got, want)
+	for _, c := range cases {
+		name, val := extractCookie(c.in)
+		if name != c.wantName || val != c.wantValue {
+			t.Errorf("extractCookie(%q) = (%q,%q), want (%q,%q)", c.in, name, val, c.wantName, c.wantValue)
 		}
 	}
 }
@@ -41,7 +49,7 @@ func TestEmailLoginSavesToResolvedProfile(t *testing.T) {
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"retCode": "0",
 			"result": map[string]any{
-				"cookieStr": `{"Name":"user_auth_name","Value":"DEVcookie=="}`,
+				"cookieStr": `{"Name":"929a528c9d53c705","Value":"DEVcookie=="}`,
 				"user":      map[string]any{"userId": "42"},
 			},
 		})
@@ -73,6 +81,11 @@ func TestEmailLoginSavesToResolvedProfile(t *testing.T) {
 	got, _ := clifconfig.Load()
 	if c := got.Profiles["dev"].Auth.AuthCookie; c != "DEVcookie==" {
 		t.Errorf("dev cookie = %q, want %q", c, "DEVcookie==")
+	}
+	// The environment-specific cookie name must be persisted (regression: prod
+	// failed because the CLI dropped the name and hardcoded user_auth_name).
+	if n := got.Profiles["dev"].Auth.AuthCookieName; n != "929a528c9d53c705" {
+		t.Errorf("cookie name = %q, want %q (name was dropped)", n, "929a528c9d53c705")
 	}
 	if c := got.Profiles["default"].Auth.AuthCookie; c != "" {
 		t.Errorf("default cookie = %q, want empty (cookie leaked to wrong profile)", c)

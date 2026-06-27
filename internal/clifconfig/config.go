@@ -61,6 +61,10 @@ type Profile struct {
 type AuthProfile struct {
 	// Cookie auth (copied from browser DevTools)
 	AuthCookie string `yaml:"auth_cookie"`
+	// Session cookie name, captured from the login response. It is
+	// environment-specific (dev=user_auth_name, staging/prod differ) per the
+	// backend's CookieNameMap, so it must be sent under the right name.
+	AuthCookieName string `yaml:"auth_cookie_name"`
 
 	// User identity
 	UserID string `yaml:"user_id"`

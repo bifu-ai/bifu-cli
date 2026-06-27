@@ -61,7 +61,7 @@ func (am *AuthManager) ApplyCookie(req *http.Request) {
 
 func (am *AuthManager) applyCookieLocked(req *http.Request) {
 	if am.profile.AuthCookie != "" {
-		req.Header.Set("Cookie", "user_auth_name="+am.profile.AuthCookie)
+		req.Header.Set("Cookie", am.profile.AuthCookieName+"="+am.profile.AuthCookie)
 	}
 }
 
