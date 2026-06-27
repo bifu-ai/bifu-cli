@@ -77,6 +77,10 @@ func TestEmailLoginSavesToResolvedProfile(t *testing.T) {
 	if c := got.Profiles["default"].Auth.AuthCookie; c != "" {
 		t.Errorf("default cookie = %q, want empty (cookie leaked to wrong profile)", c)
 	}
+	// Logging into "dev" should also make it the active profile.
+	if got.ActiveProfile != "dev" {
+		t.Errorf("active profile = %q, want %q after logging into dev", got.ActiveProfile, "dev")
+	}
 }
 
 // TestDeviceLoginFlow drives runDeviceLogin end to end against a mock backend

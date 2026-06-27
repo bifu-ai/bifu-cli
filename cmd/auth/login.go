@@ -150,11 +150,14 @@ Backed by the existing scan-to-login endpoints
 			if userID != "" {
 				p.Auth.UserID = userID
 			}
+			// Logging into a profile is a clear "use this" signal — make it the
+			// active profile so subsequent commands without --profile target it.
+			cfg.ActiveProfile = profile.Name
 			if err := cfg.Save(); err != nil {
 				return fmt.Errorf("save config: %w", err)
 			}
 
-			fmt.Printf("✓ Logged in. Session cookie saved to profile %q\n", profile.Name)
+			fmt.Printf("✓ Logged in. Session saved and active profile set to %q\n", profile.Name)
 			if userID != "" {
 				fmt.Printf("  user_id : %s\n", userID)
 			}
@@ -259,10 +262,12 @@ func runDeviceLogin(load LoadFn) error {
 			if userID != "" {
 				p.Auth.UserID = userID
 			}
+			// Make the just-authenticated profile active (see email path above).
+			cfg.ActiveProfile = profile.Name
 			if err := cfg.Save(); err != nil {
 				return fmt.Errorf("save config: %w", err)
 			}
-			fmt.Printf("✓ Authentication complete. Cookie saved to profile %q\n", profile.Name)
+			fmt.Printf("✓ Authentication complete. Session saved and active profile set to %q\n", profile.Name)
 			if userID != "" {
 				fmt.Printf("  user_id : %s\n", userID)
 			}
