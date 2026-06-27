@@ -8,7 +8,7 @@
 package meta
 
 import (
-	"crypto/sha1"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -223,7 +223,7 @@ type cacheFile struct {
 
 // cachePath returns a per-environment cache file path under the config dir.
 func (c *Client) cachePath() string {
-	sum := sha1.Sum([]byte(c.profile.BaseURL))
+	sum := sha256.Sum256([]byte(c.profile.BaseURL))
 	name := "meta-" + hex.EncodeToString(sum[:6]) + ".json"
 	return filepath.Join(clifconfig.ConfigDir(), "cache", name)
 }

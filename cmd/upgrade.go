@@ -141,7 +141,9 @@ method it was installed with (Homebrew, npm, or the curl installer).
 				}
 			}
 			fmt.Printf("→ %s\n", command)
-			c := exec.Command("sh", "-c", command)
+			// command is a fixed string from installMethod() (brew/npm/curl), not
+			// user input, so there is no shell-injection surface here.
+			c := exec.Command("sh", "-c", command) // #nosec G204 -- command is a hardcoded constant, not user-controlled
 			c.Stdin, c.Stdout, c.Stderr = os.Stdin, os.Stdout, os.Stderr
 			if err := c.Run(); err != nil {
 				return fmt.Errorf("upgrade command failed: %w", err)

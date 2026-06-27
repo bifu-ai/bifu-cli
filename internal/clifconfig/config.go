@@ -134,7 +134,7 @@ func ConfigPath() string {
 // a "default" profile is returned (not written to disk).
 func Load() (*CLIConfig, error) {
 	path := ConfigPath()
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) // #nosec G304 -- our own config path (~/.bifu-cli or $BIFU_CLI_HOME), not untrusted input
 	if os.IsNotExist(err) {
 		return defaultConfig(), nil
 	}

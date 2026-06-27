@@ -121,7 +121,7 @@ func setupCodex(pr *output.Printer, exe, profile string) error {
 
 	if codexPath, err := exec.LookPath("codex"); err == nil {
 		addArgs := append([]string{"mcp", "add", "bifu", "--"}, serverCmd...)
-		out, err := exec.Command(codexPath, addArgs...).CombinedOutput()
+		out, err := exec.Command(codexPath, addArgs...).CombinedOutput() // #nosec G204 -- fixed args; serverCmd is this binary's own path
 		if err != nil {
 			return fmt.Errorf("codex mcp add failed: %w\n%s", err, strings.TrimSpace(string(out)))
 		}
@@ -164,6 +164,7 @@ func clientConfigPath(clientName string) (path, serversKey string, err error) {
 // "bifu" server under serversKey, and writes it back, preserving other entries.
 func mergeMCPConfig(path, serversKey string, entry map[string]any) error {
 	cfg := map[string]any{}
+	// #nosec G304 -- path is a known MCP-client config location, not untrusted input
 	if data, err := os.ReadFile(path); err == nil && len(data) > 0 {
 		if err := json.Unmarshal(data, &cfg); err != nil {
 			return fmt.Errorf("parse existing config: %w", err)
@@ -176,12 +177,12 @@ func mergeMCPConfig(path, serversKey string, entry map[string]any) error {
 	servers["bifu"] = entry
 	cfg[serversKey] = servers
 
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil { // #nosec G301 -- MCP-client config dir, not secret
 		return err
 	}
 	out, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, out, 0o644)
+	return os.WriteFile(path, out, 0o644) // #nosec G306 -- MCP-client config (no secrets), readable by the client app
 }

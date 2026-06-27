@@ -2,12 +2,14 @@ module bifu-cli
 
 go 1.25.5
 
+toolchain go1.25.11
+
 require (
 	github.com/briandowns/spinner v1.23.2
 	github.com/fatih/color v1.19.0
 	github.com/gorilla/websocket v1.5.3
 	github.com/jedib0t/go-pretty/v6 v6.8.1
-	github.com/mark3labs/mcp-go v0.55.0
+	github.com/mark3labs/mcp-go v0.55.1
 	github.com/mdp/qrterminal/v3 v3.2.1
 	github.com/spf13/cobra v1.10.2
 	golang.org/x/term v0.44.0
@@ -15,18 +17,18 @@ require (
 )
 
 require (
-	github.com/clipperhouse/uax29/v2 v2.6.0 // indirect
-	github.com/google/jsonschema-go v0.4.2 // indirect
+	github.com/clipperhouse/uax29/v2 v2.7.0 // indirect
+	github.com/google/jsonschema-go v0.4.3 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
-	github.com/mattn/go-colorable v0.1.14 // indirect
-	github.com/mattn/go-isatty v0.0.20 // indirect
-	github.com/mattn/go-runewidth v0.0.19 // indirect
+	github.com/mattn/go-colorable v0.1.15 // indirect
+	github.com/mattn/go-isatty v0.0.22 // indirect
+	github.com/mattn/go-runewidth v0.0.24 // indirect
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2 // indirect
-	github.com/spf13/cast v1.7.1 // indirect
-	github.com/spf13/pflag v1.0.9 // indirect
+	github.com/spf13/cast v1.10.0 // indirect
+	github.com/spf13/pflag v1.0.10 // indirect
 	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
 	golang.org/x/sys v0.46.0 // indirect
-	golang.org/x/text v0.22.0 // indirect
+	golang.org/x/text v0.38.0 // indirect
 	rsc.io/qr v0.2.0 // indirect
 )

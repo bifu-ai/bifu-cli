@@ -414,7 +414,7 @@ type loginResp struct {
 }
 
 func doLogin(baseURL, username, password, terminalType string) (issueID string, err error) {
-	body, _ := json.Marshal(loginReq{Username: username, Password: password})
+	body, _ := json.Marshal(loginReq{Username: username, Password: password}) // #nosec G117 -- login request body sent to the auth API over TLS; not persisted/logged
 	req, err := http.NewRequest("POST", baseURL+"/user/login", bytes.NewReader(body))
 	if err != nil {
 		return "", err

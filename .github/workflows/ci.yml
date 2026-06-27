@@ -50,3 +50,19 @@ jobs:
         run: |
           go install honnef.co/go/tools/cmd/staticcheck@latest
           staticcheck ./...
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      # Dependency + standard-library CVEs (reachable call paths only).
+      - name: govulncheck
+        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+      # Static security analysis (gosec). False positives are annotated with
+      # `// #nosec <rule> -- reason` in the code.
+      - name: gosec
+        run: go run github.com/securego/gosec/v2/cmd/gosec@latest -quiet ./...

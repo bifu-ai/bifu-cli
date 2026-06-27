@@ -102,7 +102,7 @@ Cursor uses its Project Rules format (.mdc); Claude Code uses SKILL.md.`,
 			if err != nil {
 				return err
 			}
-			if err := os.MkdirAll(dir, 0o755); err != nil {
+			if err := os.MkdirAll(dir, 0o755); err != nil { // #nosec G301 -- skill docs dir, not secret
 				return fmt.Errorf("create %s: %w", dir, err)
 			}
 
@@ -115,13 +115,13 @@ Cursor uses its Project Rules format (.mdc); Claude Code uses SKILL.md.`,
 					data = []byte(cursorMDC(s))
 				} else {
 					d := filepath.Join(dir, s.Name)
-					if err := os.MkdirAll(d, 0o755); err != nil {
+					if err := os.MkdirAll(d, 0o755); err != nil { // #nosec G301 -- skill docs dir, not secret
 						return fmt.Errorf("create %s: %w", d, err)
 					}
 					path = filepath.Join(d, "SKILL.md")
 					data = []byte(s.Content)
 				}
-				if err := os.WriteFile(path, data, 0o644); err != nil {
+				if err := os.WriteFile(path, data, 0o644); err != nil { // #nosec G306 -- skill doc (no secrets), meant to be readable by agents
 					return fmt.Errorf("write %s: %w", path, err)
 				}
 				pr.Line("  %s", path)

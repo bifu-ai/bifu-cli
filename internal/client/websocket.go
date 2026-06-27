@@ -198,7 +198,7 @@ func (c *WSClient) Close() {
 		if c.conn != nil {
 			_ = c.conn.WriteMessage(websocket.CloseMessage,
 				websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
-			c.conn.Close()
+			_ = c.conn.Close()
 			c.connected = false
 		}
 	})
