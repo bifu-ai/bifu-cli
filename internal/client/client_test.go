@@ -140,7 +140,7 @@ func TestHTTPErrorMapping(t *testing.T) {
 		{http.StatusUnauthorized, "", "auth login"},
 		{http.StatusForbidden, "nope", "access denied"},
 		{http.StatusNotFound, "", "not found"},
-		{http.StatusInternalServerError, "kaboom", "HTTP error 500"},
+		{http.StatusInternalServerError, "kaboom", "server error (HTTP 500)"},
 	}
 	for _, c := range cases {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -183,6 +183,48 @@ func TestHTTPRequestSendsCookieAndParsesBody(t *testing.T) {
 	}
 	if dst.OrderID != "7" {
 		t.Errorf("OrderID = %q, want %q", dst.OrderID, "7")
+	}
+}
+
+func TestGETRetriesTransientUnknown(t *testing.T) {
+	var calls int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		if calls < 3 { // first two attempts return the transient UNKNOWN envelope
+			_, _ = w.Write([]byte(`{"code":"UNKNOWN","data":null}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"code":"SUCCESS","data":{"orderId":"9"}}`))
+	}))
+	defer srv.Close()
+
+	resp, err := newTestClient(srv.URL).GetSpot(srv.URL, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if calls != 3 {
+		t.Errorf("server calls = %d, want 3 (two transient + one success)", calls)
+	}
+	var dst struct {
+		OrderID string `json:"orderId"`
+	}
+	if err := ParseAPIResponse(resp.Body, &dst); err != nil || dst.OrderID != "9" {
+		t.Errorf("final response not the success body: %v / %q", err, dst.OrderID)
+	}
+}
+
+func TestPOSTNotRetried(t *testing.T) {
+	var calls int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		w.WriteHeader(http.StatusInternalServerError) // transient 5xx
+	}))
+	defer srv.Close()
+
+	// A POST (e.g. order creation) must NOT be replayed, even on a 5xx.
+	_, _ = newTestClient(srv.URL).PostSpot(srv.URL, map[string]string{"a": "b"})
+	if calls != 1 {
+		t.Errorf("POST attempted %d times, want 1 (no replay of a write)", calls)
 	}
 }
 

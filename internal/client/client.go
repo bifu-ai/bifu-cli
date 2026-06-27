@@ -145,83 +145,119 @@ func (c *HTTPClient) do(method, rawURL string, params map[string]string, body in
 	}
 
 	// Serialise body
-	var bodyReader io.Reader
+	var rawBody []byte
 	var bodyStr string
 	if body != nil {
 		b, err := json.Marshal(body)
 		if err != nil {
 			return nil, fmt.Errorf("marshal body: %w", err)
 		}
+		rawBody = b
 		bodyStr = string(b)
-		bodyReader = bytes.NewReader(b)
 	}
-
-	req, err := http.NewRequest(method, u.String(), bodyReader)
-	if err != nil {
-		return nil, fmt.Errorf("build request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	// Apply auth — all authenticated endpoints use the session cookie.
-	c.auth.ApplyCookie(req)
 
 	if c.Verbose {
 		fmt.Fprintf(os.Stderr, "[HTTP] %s %s\n", method, u.String())
-		for k, vs := range req.Header {
-			val := strings.Join(vs, ", ")
-			// Never log session credentials (would leak into shell history / CI logs).
-			if h := strings.ToLower(k); h == "cookie" || h == "authorization" {
-				val = "<redacted>"
-			}
-			fmt.Fprintf(os.Stderr, "[HTTP]   %s: %s\n", k, val)
-		}
 		if bodyStr != "" {
 			fmt.Fprintf(os.Stderr, "[HTTP]   body: %s\n", bodyStr)
 		}
 	}
 
-	stop := startSpinner(method+" "+u.Path, c.Verbose)
+	// Retry only idempotent GETs — never replay a POST (would risk a double
+	// order). Transient failures (network error, 5xx, or a 200 carrying the
+	// backend's intermittent "UNKNOWN" code) are retried with a short backoff so
+	// a momentary server blip doesn't surface as a hard error to the user.
+	attempts := 1
+	if method == "GET" {
+		attempts = 3
+	}
+
+	var data []byte
+	var statusCode int
 	start := time.Now()
-	resp, err := c.http.Do(req)
-	if err != nil {
+	for attempt := 1; ; attempt++ {
+		req, err := http.NewRequest(method, u.String(), bytesReader(rawBody))
+		if err != nil {
+			return nil, fmt.Errorf("build request: %w", err)
+		}
+		req.Header.Set("Content-Type", "application/json")
+		c.auth.ApplyCookie(req)
+
+		stop := startSpinner(method+" "+u.Path, c.Verbose)
+		resp, derr := c.http.Do(req)
+		if derr != nil {
+			stop()
+			if attempt < attempts {
+				time.Sleep(time.Duration(attempt) * 300 * time.Millisecond)
+				continue
+			}
+			return nil, fmt.Errorf("request: %w", derr)
+		}
+		data, err = io.ReadAll(resp.Body)
+		_ = resp.Body.Close()
 		stop()
-		return nil, fmt.Errorf("request: %w", err)
-	}
-	defer resp.Body.Close()
+		if err != nil {
+			return nil, fmt.Errorf("read body: %w", err)
+		}
+		statusCode = resp.StatusCode
 
-	data, err := io.ReadAll(resp.Body)
-	stop()
-	if err != nil {
-		return nil, fmt.Errorf("read body: %w", err)
+		if c.Verbose {
+			fmt.Fprintf(os.Stderr, "[HTTP] <- %d (%dms) body: %s\n",
+				statusCode, time.Since(start).Milliseconds(), truncate(string(data), 500))
+		}
+
+		if attempt < attempts && isTransient(statusCode, data) {
+			time.Sleep(time.Duration(attempt) * 300 * time.Millisecond)
+			continue
+		}
+		break
 	}
 
-	if c.Verbose {
-		fmt.Fprintf(os.Stderr, "[HTTP] <- %d (%dms) body: %s\n",
-			resp.StatusCode, time.Since(start).Milliseconds(), truncate(string(data), 500))
-	}
-
-	if resp.StatusCode == 401 {
+	switch {
+	case statusCode == 401:
 		return nil, fmt.Errorf("authentication failed (HTTP 401): session expired or invalid — run `bifu-cli auth login`")
-	}
-	if resp.StatusCode == 403 {
+	case statusCode == 403:
 		msg := strings.TrimSpace(string(data))
 		if msg == "" {
 			msg = "access denied"
 		}
 		return nil, fmt.Errorf("access denied (HTTP 403): %s", msg)
-	}
-	if resp.StatusCode == 404 {
+	case statusCode == 404:
 		return nil, fmt.Errorf("endpoint not found (HTTP 404): %s", rawURL)
-	}
-	if resp.StatusCode >= 400 {
-		return nil, fmt.Errorf("HTTP error %d: %s", resp.StatusCode, strings.TrimSpace(string(data)))
+	case statusCode >= 500:
+		return nil, fmt.Errorf("server error (HTTP %d) — please retry in a moment", statusCode)
+	case statusCode >= 400:
+		return nil, fmt.Errorf("HTTP error %d: %s", statusCode, strings.TrimSpace(string(data)))
 	}
 
 	return &HTTPResponse{
-		StatusCode: resp.StatusCode,
+		StatusCode: statusCode,
 		Body:       data,
 		Duration:   time.Since(start),
 	}, nil
+}
+
+// bytesReader returns a fresh reader over b (nil-safe), so a request body can be
+// rebuilt for each retry attempt.
+func bytesReader(b []byte) io.Reader {
+	if b == nil {
+		return nil
+	}
+	return bytes.NewReader(b)
+}
+
+// isTransient reports whether a response is worth retrying: a 5xx, or a 200 that
+// carries the backend's intermittent "UNKNOWN" envelope code (seen sporadically
+// on read endpoints).
+func isTransient(status int, body []byte) bool {
+	if status >= 500 {
+		return true
+	}
+	if status == 200 {
+		return bytes.Contains(body, []byte(`"code":"UNKNOWN"`)) ||
+			bytes.Contains(body, []byte(`"code": "UNKNOWN"`))
+	}
+	return false
 }
 
 // ── JSON helpers ──────────────────────────────────────────────────────────────
