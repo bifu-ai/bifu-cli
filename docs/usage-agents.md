@@ -24,6 +24,8 @@ npm i -g @decodeex/bifu-cli
 
 验证:`bifu-cli version`
 
+升级:`bifu-cli version --check`(查是否有新版)、`bifu-cli upgrade`(按安装方式自动升级,`-y` 免确认)
+
 ---
 
 ## 2. 给 AI 代理接入(两条路:Skills + MCP)
