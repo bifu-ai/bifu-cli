@@ -231,10 +231,12 @@ func runDeviceLogin(load LoadFn) error {
 	printApprovalQR(scanURL)
 	fmt.Printf("\nSame target as the QR (scanning with the Bifu app is easiest).\n"+
 		"Opening it in a browser only works if that browser is already signed in to Bifu:\n  %s\n", scanURL)
-	fmt.Println("\nWaiting for approval (expires in 3 min)...")
+	fmt.Println("\nWaiting for approval (expires in 2 min)...")
 
 	// ── Step 3: poll until approved / rejected / expired ──────────────────────
-	deadline := time.Now().Add(3 * time.Minute)
+	// Backend expires the issue after 120s (IssueExpiredTime); match it so we
+	// stop polling right as it lapses instead of hitting a stale-key error.
+	deadline := time.Now().Add(2 * time.Minute)
 	for {
 		if time.Now().After(deadline) {
 			return fmt.Errorf("login not approved in time — run `bifu-cli auth login --device` again")
