@@ -251,9 +251,11 @@ func newInitCmd() *cobra.Command {
 				p.BaseURL = "https://fxapi.bifu.co"
 				p.WebURL = "https://bifu.co"
 				p.WebSocketURL = "wss://fxapi.bifu.co"
+				// Prod private WS hosts are bifu.live (market/quote is bifu.co) per the
+				// deploy ingress (decode-deploy: unimargin-websocket-gateway-*system).
 				p.WSMarket = "wss://quote.bifu.co/api/v1/public/ws"
-				p.WSPrivate = "wss://contract.bifu.co/api/v1/private/contract/ws"
-				p.WSPrivateSpot = "wss://spot.bifu.co/api/v1/private/spot/ws"
+				p.WSPrivate = "wss://contract.bifu.live/api/v1/private/contract/ws"
+				p.WSPrivateSpot = "wss://spot.bifu.live/api/v1/private/spot/ws"
 				p.Pushgw.WSEndpoint = "wss://fxapi.bifu.co"
 				p.Pushgw.WSPath = "/pushgw/ws"
 				p.Pushgw.TradfiWS = "wss://fxapi.bifu.co/tradfi/ws"
