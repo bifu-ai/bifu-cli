@@ -6,11 +6,13 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 
 	contractapi "bifu-cli/internal/api/contract"
+	metaapi "bifu-cli/internal/api/meta"
 	paymentapi "bifu-cli/internal/api/payment"
 	spotapi "bifu-cli/internal/api/spot"
 	"bifu-cli/internal/clifconfig"
@@ -21,6 +23,11 @@ func NewServer(profile *clifconfig.Profile, version string) *server.MCPServer {
 	spot := spotapi.New(profile)
 	contract := contractapi.New(profile)
 	payment := paymentapi.New(profile)
+
+	// Symbol resolvers: accept a symbol name (e.g. "BTCUSDT") or a numeric id.
+	// Numeric/empty values pass through without a network call.
+	resolveSpot := func(s string) (string, error) { return metaapi.ResolveSpotSymbol(profile, false, s) }
+	resolveContract := func(s string) (string, error) { return metaapi.ResolveContractSymbol(profile, false, s) }
 
 	s := server.NewMCPServer("bifu-cli", version,
 		server.WithToolCapabilities(true),
@@ -52,23 +59,35 @@ func NewServer(profile *clifconfig.Profile, version string) *server.MCPServer {
 
 	s.AddTool(mcp.NewTool("list_contract_positions",
 		mcp.WithDescription("List open contract positions."),
-		mcp.WithString("contractId", mcp.Description("Filter by numeric contractId (optional)"))),
+		mcp.WithString("contractId", mcp.Description("Filter by contractId or symbol name like BTCUSDT (optional)"))),
 		func(ctx context.Context, r mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			return jsonResult(contract.ListPositions(r.GetString("contractId", "")))
+			cid, err := resolveContract(r.GetString("contractId", ""))
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			return jsonResult(contract.ListPositions(cid))
 		})
 
 	s.AddTool(mcp.NewTool("list_spot_open_orders",
 		mcp.WithDescription("List open spot orders."),
-		mcp.WithString("symbolId", mcp.Description("Filter by numeric symbolId (optional)"))),
+		mcp.WithString("symbolId", mcp.Description("Filter by symbolId or symbol name like BTCUSDT (optional)"))),
 		func(ctx context.Context, r mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			return jsonResult(spot.ListOpenOrders(r.GetString("symbolId", "")))
+			sid, err := resolveSpot(r.GetString("symbolId", ""))
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			return jsonResult(spot.ListOpenOrders(sid))
 		})
 
 	s.AddTool(mcp.NewTool("list_contract_open_orders",
 		mcp.WithDescription("List open contract orders."),
-		mcp.WithString("contractId", mcp.Description("Filter by numeric contractId (optional)"))),
+		mcp.WithString("contractId", mcp.Description("Filter by contractId or symbol name like BTCUSDT (optional)"))),
 		func(ctx context.Context, r mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			return jsonResult(contract.ListOpenOrders(r.GetString("contractId", "")))
+			cid, err := resolveContract(r.GetString("contractId", ""))
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			return jsonResult(contract.ListOpenOrders(cid))
 		})
 
 	s.AddTool(mcp.NewTool("list_forex_accounts",
@@ -80,7 +99,7 @@ func NewServer(profile *clifconfig.Profile, version string) *server.MCPServer {
 	// ── Write tools (place / cancel orders) ───────────────────────────────────
 	s.AddTool(mcp.NewTool("create_spot_order",
 		mcp.WithDescription("Place a spot order."),
-		mcp.WithString("symbolId", mcp.Required(), mcp.Description("Numeric symbolId")),
+		mcp.WithString("symbolId", mcp.Required(), mcp.Description("symbolId or symbol name like BTCUSDT")),
 		mcp.WithString("side", mcp.Required(), mcp.Description("BUY or SELL"), mcp.Enum("BUY", "SELL")),
 		mcp.WithString("size", mcp.Required(), mcp.Description("Order size in base asset")),
 		mcp.WithString("type", mcp.Description("MARKET or LIMIT"), mcp.DefaultString("MARKET"), mcp.Enum("MARKET", "LIMIT")),
@@ -99,19 +118,24 @@ func NewServer(profile *clifconfig.Profile, version string) *server.MCPServer {
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
+			symbol, err = resolveSpot(symbol)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
 			return jsonResult(spot.CreateOrder(&spotapi.CreateOrderReq{
-				SymbolID:    symbol,
-				OrderSide:   side,
-				Type:        r.GetString("type", "MARKET"),
-				Price:       r.GetString("price", "0"),
-				Size:        size,
-				TimeInForce: r.GetString("timeInForce", "GOOD_TIL_CANCEL"),
+				SymbolID:      symbol,
+				OrderSide:     side,
+				Type:          r.GetString("type", "MARKET"),
+				Price:         r.GetString("price", "0"),
+				Size:          size,
+				TimeInForce:   r.GetString("timeInForce", "GOOD_TIL_CANCEL"),
+				ClientOrderID: profile.GenerateClientOrderID(symbol, side, time.Now()),
 			}))
 		})
 
 	s.AddTool(mcp.NewTool("create_contract_order",
 		mcp.WithDescription("Place a contract/futures order. Open long = LONG+BUY, close long = LONG+SELL+reduceOnly, open short = SHORT+SELL."),
-		mcp.WithString("contractId", mcp.Required(), mcp.Description("Numeric contractId")),
+		mcp.WithString("contractId", mcp.Required(), mcp.Description("contractId or symbol name like BTCUSDT")),
 		mcp.WithString("positionSide", mcp.Required(), mcp.Description("LONG or SHORT"), mcp.Enum("LONG", "SHORT")),
 		mcp.WithString("orderSide", mcp.Required(), mcp.Description("BUY or SELL"), mcp.Enum("BUY", "SELL")),
 		mcp.WithString("size", mcp.Required(), mcp.Description("Order size")),
@@ -136,6 +160,10 @@ func NewServer(profile *clifconfig.Profile, version string) *server.MCPServer {
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
+			contractID, err = resolveContract(contractID)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
 			return jsonResult(contract.CreateOrder(&contractapi.CreateOrderReq{
 				ContractID:           contractID,
 				MarginMode:           r.GetString("marginMode", "SHARED"),
@@ -148,6 +176,7 @@ func NewServer(profile *clifconfig.Profile, version string) *server.MCPServer {
 				Type:                 r.GetString("type", "MARKET"),
 				TimeInForce:          "GOOD_TIL_CANCEL",
 				ReduceOnly:           r.GetBool("reduceOnly", false),
+				ClientOrderID:        profile.GenerateClientOrderID(contractID, ordSide, time.Now()),
 			}))
 		})
 
