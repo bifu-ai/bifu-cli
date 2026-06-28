@@ -42,19 +42,38 @@ balances/positions/orders and place or cancel orders using the active profile.
 }
 
 func newServeCmd(load LoadFn) *cobra.Command {
-	return &cobra.Command{
+	var httpAddr, httpPath string
+	var stateless bool
+	cmd := &cobra.Command{
 		Use:   "serve",
-		Short: "Run the MCP server over stdio",
+		Short: "Run the MCP server — stdio (default) or Streamable HTTP (--http)",
+		Long: `Run the bifu MCP server. Default transport is stdio (the client launches
+this process). Use --http to instead serve the Streamable HTTP transport on a
+TCP address, mounting the MCP endpoint at --path (default /mcp).
+
+Every tool call uses the configured profile's logged-in session — the HTTP
+transport has no per-request auth, so bind it to localhost unless the network
+is trusted.`,
+		Example: `  bifu-cli --profile dev mcp serve                        # stdio (default)
+  bifu-cli --profile dev mcp serve --http 127.0.0.1:8080  # Streamable HTTP at http://127.0.0.1:8080/mcp
+  bifu-cli --profile dev mcp serve --http :8080 --stateless`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			profile, _, err := load()
 			if err != nil {
 				return err
 			}
-			// stdio is the MCP transport — keep it clean (no spinner on stderr).
+			// Keep stdout clean of the spinner (stdio uses it as the transport).
 			client.ShowSpinner = false
+			if httpAddr != "" {
+				return mcpserver.ServeHTTP(profile, version, httpAddr, httpPath, stateless)
+			}
 			return mcpserver.Serve(profile, version)
 		},
 	}
+	cmd.Flags().StringVar(&httpAddr, "http", "", "Serve Streamable HTTP on this address (e.g. 127.0.0.1:8080) instead of stdio")
+	cmd.Flags().StringVar(&httpPath, "path", "/mcp", "HTTP endpoint path (used with --http)")
+	cmd.Flags().BoolVar(&stateless, "stateless", false, "Stateless HTTP mode — no per-session state (used with --http)")
+	return cmd
 }
 
 func newSetupCmd() *cobra.Command {

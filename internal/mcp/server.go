@@ -6,6 +6,8 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"os"
 	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -214,6 +216,26 @@ func NewServer(profile *clifconfig.Profile, version string) *server.MCPServer {
 // Serve runs the MCP server over stdio (blocking).
 func Serve(profile *clifconfig.Profile, version string) error {
 	return server.ServeStdio(NewServer(profile, version))
+}
+
+// ServeHTTP runs the MCP server over Streamable HTTP (blocking). The MCP
+// endpoint is mounted at path (default "/mcp") on addr (e.g. "127.0.0.1:8080").
+//
+// Every tool call acts as the configured profile's logged-in session — there is
+// no per-request auth — so bind to localhost unless the network is trusted.
+// stateless=true disables per-session state (simpler for serverless/stateless
+// clients; the default is stateful with session IDs).
+func ServeHTTP(profile *clifconfig.Profile, version, addr, path string, stateless bool) error {
+	if path == "" {
+		path = "/mcp"
+	}
+	opts := []server.StreamableHTTPOption{server.WithEndpointPath(path)}
+	if stateless {
+		opts = append(opts, server.WithStateLess(true))
+	}
+	httpSrv := server.NewStreamableHTTPServer(NewServer(profile, version), opts...)
+	fmt.Fprintf(os.Stderr, "bifu-cli MCP server (Streamable HTTP) listening on http://%s%s\n", addr, path)
+	return httpSrv.Start(addr)
 }
 
 // jsonResult marshals any (value, error) pair into an MCP tool result.

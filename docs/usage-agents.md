@@ -109,6 +109,28 @@ bifu-cli skills install --client cursor   # → .cursor/rules/<name>.mdc
 bifu-cli mcp setup --client cursor        # 或 --client vscode
 ```
 
+### 2.4 HTTP 传输(Streamable HTTP)
+
+除默认的 stdio(由客户端拉起进程)外,`mcp serve` 也支持 **Streamable HTTP**
+传输 —— 适合远程/共享部署,或不便拉起子进程的客户端。
+
+```bash
+bifu-cli --profile dev mcp serve --http 127.0.0.1:8080        # 监听 http://127.0.0.1:8080/mcp
+bifu-cli --profile dev mcp serve --http :8080 --path /mcp     # 自定义路径
+bifu-cli --profile dev mcp serve --http 127.0.0.1:8080 --stateless  # 无状态模式(serverless 友好)
+```
+
+把这个 URL 注册到客户端:
+
+```bash
+# Claude Code
+claude mcp add --transport http bifu http://127.0.0.1:8080/mcp
+# Cursor / VS Code:在其 mcp.json 用 { "url": "http://127.0.0.1:8080/mcp" } 形式
+```
+
+> **安全**:HTTP 传输按**当前 profile 的登录会话**执行,且**没有逐请求鉴权** ——
+> 务必绑定 `127.0.0.1`(本机),除非在可信网络;对外暴露需自行在前面加鉴权网关。
+
 ### 可用技能(10 个)
 
 `bifu-auth`(登录)、`bifu-config`(配置/Profile)、`bifu-spot`、`bifu-contract`、
