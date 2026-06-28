@@ -819,7 +819,7 @@ git tag v1.2.0 && git push origin v1.2.0
 | Secret `NPM_TOKEN` | npm `@decodeex` org 的自动化发布 token |
 | 仓库 `decodeex/homebrew-tap` | 新建空仓库(GoReleaser 首次发布会写入 `Casks/bifu-cli.rb`) |
 | 仓库 `bifu-ai/bifu-cli` | 新建公开仓库(开源上游镜像;`sync-upstream.yml` 把 `main` 推到这里) |
-| Secret `UPSTREAM_SYNC_TOKEN` | 对 `bifu-ai/bifu-cli` 有 `contents: write` 权限的 PAT/细粒度 token(上游同步用) |
+| Secret `UPSTREAM_SYNC_SSH_KEY` | 写权限 **deploy key** 的私钥(公钥加到 `bifu-ai/bifu-cli` 的 Deploy keys,勾选 write)——仅对该仓库可写,最小权限,无过期 |
 | GitHub Pages | 仓库 Settings → Pages → Source 选 **GitHub Actions** |
 | DNS | 给 `cli.bifu.dev` 加 CNAME 记录指向 `decodeex.github.io`(`docs/CNAME` 已声明该域名) |
 

@@ -2,7 +2,8 @@ name: Sync to upstream (open source)
 
 # Mirror the main branch to the public open-source repo under the bifu-ai org.
 # bifu-ai/bifu-cli is a one-way managed mirror — never commit to it directly,
-# every push here is overwritten by this job.
+# every push here is overwritten by this job. Auth is a write deploy key scoped
+# to ONLY bifu-ai/bifu-cli (private key in the UPSTREAM_SYNC_SSH_KEY secret).
 
 on:
   push:
@@ -30,14 +31,16 @@ jobs:
 
       - name: Push main to the bifu-ai upstream
         env:
-          # PAT (or fine-grained token) with `contents: write` on ${UPSTREAM_REPO}.
-          TOKEN: ${{ secrets.UPSTREAM_SYNC_TOKEN }}
+          SSH_KEY: ${{ secrets.UPSTREAM_SYNC_SSH_KEY }}
         run: |
-          if [ -z "$TOKEN" ]; then
-            echo "::warning::UPSTREAM_SYNC_TOKEN not set — skipping upstream sync. Add a PAT with contents:write on ${UPSTREAM_REPO} to enable it."
+          if [ -z "$SSH_KEY" ]; then
+            echo "::warning::UPSTREAM_SYNC_SSH_KEY not set — skipping upstream sync. Add the deploy-key private key to enable it."
             exit 0
           fi
-          url="https://x-access-token:${TOKEN}@github.com/${UPSTREAM_REPO}.git"
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
           # Force so the upstream branch always matches this repo's main exactly.
-          git push --force "$url" "HEAD:refs/heads/${UPSTREAM_BRANCH}"
+          git push --force "git@github.com:${UPSTREAM_REPO}.git" "HEAD:refs/heads/${UPSTREAM_BRANCH}"
           echo "Synced $(git rev-parse --short HEAD) -> ${UPSTREAM_REPO}@${UPSTREAM_BRANCH}"
