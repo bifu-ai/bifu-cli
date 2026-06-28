@@ -1,10 +1,12 @@
 # bifu-cli 使用说明(给 AI 编程代理)
 
-面向 **Codex / Claude Code / Cursor** 等 AI 编程代理的 bifu-cli 接入与使用说明。
+面向 **Claude Desktop / Codex / Cursor / VS Code / Claude Code** 等 AI 代理的 bifu-cli
+接入与使用说明(`mcp setup --client` 一键注册这些客户端)。
 bifu-cli 是 BifuFX 交易平台命令行工具:现货、合约、外汇(MT5/TradFi)、支付、
 WebSocket 实时行情、orion 信号订阅,并内置 **MCP server** 与 **agent skills**,
 让 AI 代理可以直接读余额/持仓/订单、下单/撤单。
 
+> 跨平台:macOS / Windows / Linux(各客户端配置路径自动按系统选择)。
 > 命令与配置风格对齐主流交易所 CLI;多 Profile 管理(custom/dev/staging/prod)。
 
 ---
@@ -41,13 +43,20 @@ npm i -g @decodeex/bifu-cli
 # 安装技能到项目(或加 --global 到 ~/.claude/skills)
 bifu-cli skills install --client claude
 
-# 注册 MCP server 到 Claude
+# 注册 MCP server 到 Claude Code(底层走 `claude mcp add`,写入 ~/.claude.json)
 bifu-cli --profile dev mcp setup --client claude
 ```
 
 - 技能落到 `.claude/skills/<name>/SKILL.md`,Claude Code 自动识别。
-- MCP 注册后,Claude 可调用 bifu 工具(读余额/持仓/下单等)。
+- MCP 用官方 `claude mcp add bifu -- bifu-cli --profile dev mcp serve` 注册;默认 **local
+  作用域(仅当前项目)**。要**所有项目可用**:`claude mcp add -s user bifu -- bifu-cli --profile dev mcp serve`。
+- 验证:`claude mcp list`(应显示 `bifu … ✓ Connected`),或在 Claude Code 里 `/mcp`。
 
+> **Claude Desktop(桌面 App,不是 Claude Code)**走另一份配置,用 `--client claude-desktop`:
+> `bifu-cli --profile dev mcp setup --client claude-desktop`,重启 App 生效。Claude Desktop 官方只有
+> macOS / Windows 版,写入 `claude_desktop_config.json`:macOS `~/Library/Application Support/Claude/`、
+> Windows `%APPDATA%\Claude\`(其余系统回退到 `~/.config/Claude/`)。
+>
 > **关于 `--profile`**:非必填。带上(如 `--profile dev`)会把启动命令钉成
 > `mcp serve --profile dev`,**钉死该环境**,与后续 `config use` 无关;**省略**则注册
 > `mcp serve`,运行时**跟随当前活动 profile**。MCP 是给代理真实下单用的,**建议显式钉死
@@ -63,7 +72,10 @@ Codex **支持 MCP**(stdio server)。三种方式,任选其一:
 bifu-cli --profile dev mcp setup --client codex
 ```
 
-装了 codex 就自动 `codex mcp add bifu`;没装则打印可粘贴的 TOML 片段。
+自动调用 `codex mcp add bifu`。codex CLI 不在 PATH 时,macOS 上还会自动到桌面版
+**Codex.app**(`/Applications/Codex.app/Contents/Resources/codex`)里找内置二进制;
+Windows / Linux 请确保 `codex` 在 PATH(npm 安装默认即在)。都找不到时退化成打印
+可粘贴的 TOML 片段。
 
 **方式 B — codex 原生命令**
 
@@ -80,7 +92,8 @@ args = ["--profile", "dev", "mcp", "serve"]
 ```
 
 > 注意:profile 走 `--profile`(bifu-cli 不读环境变量选 profile)。
-> 在 Codex TUI 里用 `/mcp` 查看已加载的 server 验证。
+> 验证:`codex mcp list`(或 `codex mcp get bifu`)应看到 `bifu`、`enabled`、`transport: stdio`。
+> `Auth` 列显示 `Unsupported` 是正常的 —— stdio server 没有 OAuth 登录流程,不影响调用。
 
 Codex 走「项目说明 + 命令行」的话:把技能装到目录,在 `AGENTS.md` 里引用,
 或直接让 Codex 跑 `bifu-cli <命令>`:

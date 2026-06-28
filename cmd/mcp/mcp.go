@@ -30,11 +30,11 @@ func NewMCPCmd(load LoadFn) *cobra.Command {
 		Use:   "mcp",
 		Short: "Model Context Protocol server (let AI agents trade via bifu-cli)",
 		Long: `Expose bifu-cli's trading tools over the Model Context Protocol so AI agents
-(Claude Desktop, Cursor, VS Code, …) can read balances/positions/orders and
-place or cancel orders using the active profile.
+(Claude Code, Codex, Cursor, VS Code, Claude Desktop, …) can read
+balances/positions/orders and place or cancel orders using the active profile.
 
   bifu-cli mcp serve                  # run the stdio MCP server
-  bifu-cli mcp setup --client cursor  # register the server with a client`,
+  bifu-cli mcp setup --client claude  # register with Claude Code (claude mcp add)`,
 	}
 	cmd.AddCommand(newServeCmd(load))
 	cmd.AddCommand(newSetupCmd())
@@ -62,9 +62,10 @@ func newSetupCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "setup",
 		Short: "Register the bifu MCP server with an MCP client",
-		Example: `  bifu-cli mcp setup --client cursor
-  bifu-cli --profile dev mcp setup --client claude
-  bifu-cli --profile dev mcp setup --client codex`,
+		Example: `  bifu-cli --profile dev mcp setup --client claude   # Claude Code (claude mcp add)
+  bifu-cli --profile dev mcp setup --client codex    # OpenAI Codex (codex mcp add)
+  bifu-cli mcp setup --client cursor
+  bifu-cli mcp setup --client claude-desktop`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			pr := output.NewPrinter(output.FormatTable, false)
 
@@ -80,10 +81,13 @@ func newSetupCmd() *cobra.Command {
 			}
 			entry := map[string]any{"command": exe, "args": serverArgs}
 
-			// Codex uses TOML (~/.codex/config.toml), not JSON — handle separately
-			// via the official `codex mcp add` (falls back to a TOML snippet).
-			if clientName == "codex" {
-				return setupCodex(pr, exe, profile)
+			// CLI-managed clients own their own config — register via their
+			// official `... mcp add` command (each falls back to a snippet).
+			switch clientName {
+			case "claude", "claude-code":
+				return setupClaudeCode(pr, exe, profile) // Claude Code (~/.claude.json)
+			case "codex":
+				return setupCodex(pr, exe, profile) // OpenAI Codex (~/.codex/config.toml)
 			}
 
 			path, key, err := clientConfigPath(clientName)
@@ -104,8 +108,47 @@ func newSetupCmd() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&clientName, "client", "", "MCP client: claude | cursor | vscode | codex (omit to print a snippet)")
+	cmd.Flags().StringVar(&clientName, "client", "", "MCP client: claude (Claude Code) | codex | cursor | vscode | claude-desktop (omit to print a snippet)")
+	_ = cmd.RegisterFlagCompletionFunc("client", func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
+		return []string{"claude", "codex", "cursor", "vscode", "claude-desktop"}, cobra.ShellCompDirectiveNoFileComp
+	})
 	return cmd
+}
+
+// setupClaudeCode registers the bifu MCP server with Claude Code (the `claude`
+// CLI / IDE extension) via the official `claude mcp add`, which owns
+// ~/.claude.json. NOTE: this is the Claude Code agent, not the Claude Desktop
+// app (that's --client claude-desktop). Falls back to a copy-paste command and
+// a project .mcp.json snippet when the claude CLI isn't on PATH.
+func setupClaudeCode(pr *output.Printer, exe, profile string) error {
+	serverCmd := []string{exe}
+	if profile != "" {
+		serverCmd = append(serverCmd, "--profile", profile)
+	}
+	serverCmd = append(serverCmd, "mcp", "serve")
+
+	claudePath, err := exec.LookPath("claude")
+	if err != nil {
+		pr.Line("Claude Code CLI not found on PATH. Once installed, run:\n\n  claude mcp add bifu -- %s\n", strings.Join(serverCmd, " "))
+		snippet, _ := json.MarshalIndent(map[string]any{
+			"mcpServers": map[string]any{"bifu": map[string]any{"command": exe, "args": serverCmd[1:]}},
+		}, "", "  ")
+		pr.Line("Or add to a project .mcp.json:\n%s", string(snippet))
+		return nil
+	}
+
+	// Re-register (remove first) so a changed --profile takes effect — `claude
+	// mcp add` errors if the name already exists.
+	_ = exec.Command(claudePath, "mcp", "remove", "bifu").Run() // #nosec G204 -- fixed args
+	addArgs := append([]string{"mcp", "add", "bifu", "--"}, serverCmd...)
+	out, err := exec.Command(claudePath, addArgs...).CombinedOutput() // #nosec G204 -- fixed args; serverCmd is this binary's own path
+	if err != nil {
+		return fmt.Errorf("claude mcp add failed: %w\n%s", err, strings.TrimSpace(string(out)))
+	}
+	pr.OK("Registered bifu MCP server with Claude Code (claude mcp add bifu)")
+	pr.Line("  Scope: local (this project). For all projects: claude mcp add -s user bifu -- %s", strings.Join(serverCmd, " "))
+	pr.Line("  Verify with: claude mcp list  (or /mcp inside Claude Code)")
+	return nil
 }
 
 // setupCodex registers the bifu MCP server with the OpenAI Codex CLI. It prefers
@@ -119,14 +162,16 @@ func setupCodex(pr *output.Printer, exe, profile string) error {
 	}
 	serverCmd = append(serverCmd, "mcp", "serve")
 
-	if codexPath, err := exec.LookPath("codex"); err == nil {
+	if codexPath := lookCodex(); codexPath != "" {
+		// Re-register so a changed --profile takes effect (add errors if it exists).
+		_ = exec.Command(codexPath, "mcp", "remove", "bifu").Run() // #nosec G204 -- fixed args
 		addArgs := append([]string{"mcp", "add", "bifu", "--"}, serverCmd...)
 		out, err := exec.Command(codexPath, addArgs...).CombinedOutput() // #nosec G204 -- fixed args; serverCmd is this binary's own path
 		if err != nil {
 			return fmt.Errorf("codex mcp add failed: %w\n%s", err, strings.TrimSpace(string(out)))
 		}
 		pr.OK("Registered bifu MCP server with Codex (codex mcp add bifu)")
-		pr.Line("  Verify in the Codex TUI with: /mcp")
+		pr.Line("  Verify with: codex mcp list  (or /mcp in the Codex TUI)")
 		return nil
 	}
 
@@ -141,20 +186,72 @@ func setupCodex(pr *output.Printer, exe, profile string) error {
 	return nil
 }
 
+// lookCodex finds the codex CLI: first on PATH, then inside the desktop Codex
+// app's install location (the app ships the same binary but may not add it to
+// PATH). Linux desktop builds (AppImage) have no fixed path — rely on PATH.
+func lookCodex() string {
+	if p, err := exec.LookPath("codex"); err == nil {
+		return p
+	}
+	home, _ := os.UserHomeDir()
+	var candidates []string
+	switch runtime.GOOS {
+	case "darwin":
+		candidates = []string{
+			"/Applications/Codex.app/Contents/Resources/codex",
+			filepath.Join(home, "Applications", "Codex.app", "Contents", "Resources", "codex"),
+		}
+	case "windows":
+		local := os.Getenv("LOCALAPPDATA")
+		if local == "" {
+			local = filepath.Join(home, "AppData", "Local")
+		}
+		candidates = []string{
+			filepath.Join(local, "Programs", "Codex", "codex.exe"),
+			filepath.Join(local, "Programs", "codex", "codex.exe"),
+		}
+	}
+	for _, p := range candidates {
+		// #nosec G703 -- candidates are fixed app-install locations; Stat only.
+		if fi, err := os.Stat(p); err == nil && !fi.IsDir() {
+			return p
+		}
+	}
+	return ""
+}
+
+// userConfigBase returns the per-user app-config base dir for the current OS:
+// macOS ~/Library/Application Support, Windows %APPDATA%, else $XDG_CONFIG_HOME
+// or ~/.config. Used to locate GUI clients' config across platforms.
+func userConfigBase() string {
+	home, _ := os.UserHomeDir()
+	switch runtime.GOOS {
+	case "darwin":
+		return filepath.Join(home, "Library", "Application Support")
+	case "windows":
+		if ad := os.Getenv("APPDATA"); ad != "" {
+			return ad
+		}
+		return filepath.Join(home, "AppData", "Roaming")
+	default:
+		if xdg := os.Getenv("XDG_CONFIG_HOME"); xdg != "" {
+			return xdg
+		}
+		return filepath.Join(home, ".config")
+	}
+}
+
 // clientConfigPath returns the config file path and the JSON key holding MCP
-// servers for the named client.
+// servers for the named client (cross-platform: macOS / Windows / Linux).
 func clientConfigPath(clientName string) (path, serversKey string, err error) {
 	home, _ := os.UserHomeDir()
 	switch clientName {
-	case "claude":
-		if runtime.GOOS == "darwin" {
-			return filepath.Join(home, "Library", "Application Support", "Claude", "claude_desktop_config.json"), "mcpServers", nil
-		}
-		return filepath.Join(home, ".config", "Claude", "claude_desktop_config.json"), "mcpServers", nil
+	case "claude-desktop":
+		return filepath.Join(userConfigBase(), "Claude", "claude_desktop_config.json"), "mcpServers", nil
 	case "cursor":
 		return filepath.Join(home, ".cursor", "mcp.json"), "mcpServers", nil
 	case "vscode":
-		return filepath.Join(home, ".config", "Code", "User", "mcp.json"), "servers", nil
+		return filepath.Join(userConfigBase(), "Code", "User", "mcp.json"), "servers", nil
 	default:
 		return "", "", fmt.Errorf("unknown client %q", clientName)
 	}
