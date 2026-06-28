@@ -221,7 +221,8 @@ bifu-cli spot order cancel --all --symbol BTCUSDT
 bifu-cli spot balance
 ```
 
-> 常用 dev symbolId:`90000001`=BTC-USDT、`90000002`=ETH-USDT、`90000004`=SOL-USDT。
+> 常用 symbolId(dev/prod 同号):`90000001`=BTC-USDT、`90000002`=ETH-USDT、`90000004`=SOL-USDT。
+> 直接用符号名(`BTCUSDT`)即可,无需记数字 id。
 
 ### 4.3 合约交易(contract)
 
@@ -242,7 +243,7 @@ bifu-cli contract position list [--contract BTCUSDT]
 bifu-cli contract account
 ```
 
-> 后端无改单接口:改价/改量请撤单后重下。dev:`10000001`=BTC 永续(BTC/USDT)。
+> 后端无改单接口:改价/改量请撤单后重下。常用 contractId(dev/prod 同号):`10000001`=BTC 永续(BTC/USDT)。
 
 ### 4.4 外汇(forex,MT5 / TradFi)
 
