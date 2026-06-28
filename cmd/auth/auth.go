@@ -18,5 +18,7 @@ func NewAuthCmd(load LoadFn) *cobra.Command {
 		Short: "Authentication (email/password or --device scan-to-login)",
 	}
 	cmd.AddCommand(newLoginCmd(load))
+	cmd.AddCommand(newRegisterCmd(load))
+	cmd.AddCommand(newLogoutCmd(load))
 	return cmd
 }
