@@ -23,6 +23,9 @@ env:
 
 jobs:
   mirror:
+    # Only the canonical repo mirrors outward — prevents the mirror from trying
+    # to mirror itself (it also lacks the deploy-key secret).
+    if: ${{ github.repository == 'decodeex/bifu-cli' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7

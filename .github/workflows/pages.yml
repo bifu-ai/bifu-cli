@@ -17,6 +17,10 @@ concurrency:
 
 jobs:
   deploy:
+    # Deploy the docs site only from the canonical private repo. On the public
+    # bifu-ai mirror (which receives this file via sync) Pages isn't enabled and
+    # would clash on the cli.bifu.dev custom domain — skip there.
+    if: ${{ github.repository == 'decodeex/bifu-cli' }}
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

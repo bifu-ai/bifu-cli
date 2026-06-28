@@ -29,6 +29,8 @@ concurrency:
 
 jobs:
   prerelease:
+    # Canonical repo only — the public mirror has no develop branch / release repo.
+    if: ${{ github.repository == 'decodeex/bifu-cli' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
