@@ -114,8 +114,8 @@ bifu-cli skills show bifu-spot # 查看某个
 所有认证命令共用 `auth login` 拿到的会话 cookie。先配置环境再登录。
 
 ```bash
-bifu-cli config init --env dev      # 初始化 dev 环境端点
-bifu-cli config use dev             # 设为当前 profile
+bifu-cli config init --profile dev --env dev   # 创建并初始化 dev profile
+bifu-cli config use dev                         # 设为当前 profile(否则不带 --profile 默认走 default)
 ```
 
 ### 扫码登录(推荐)
@@ -165,7 +165,7 @@ bifu-cli --profile dev auth logout
 ```bash
 bifu-cli payment balance                 # 法币储蓄余额(各币种 余额/可用/冻结)
 bifu-cli payment balance --currency USD  # 只看某币种
-bifu-cli payment balance --total         # 总资产(储蓄/外汇/跟单分项 + 合计 USD)
+bifu-cli payment balance --total         # 总资产(储蓄/外汇/跟单/体验金/RWA 分项 + 合计 USD)
 bifu-cli payment forex-accounts          # 外汇账户列表(login/平台/余额/净值/可用保证金/杠杆)
 bifu-cli spot balance                    # 现货各币种余额
 bifu-cli contract account                # 合约账户(权益/可用/已用/未实现盈亏)
@@ -179,6 +179,8 @@ Total Balance
   Saving       108296.9594 (59.95%)
   Forex        69849.34 (38.67%)
   CopyTrade    2465.19 (1.36%)
+  TrialBonus   0 (0%)
+  RWA          0 (0%)
 ```
 
 ### 4.2 现货交易(spot)
@@ -315,4 +317,4 @@ bifu-cli ws config show                                  # 查看各 WS 端点 U
 ## 6. 安全
 
 - 会话 cookie 存于 `~/.bifu-cli/config.yaml`(0600),**不会回显到终端**,`-v` 日志自动脱敏。
-- 无任何本地生成 cookie 的命令;统一走 `auth login` 真实登录。
+- 无任何本地生成 cookie 的命令;会话只来自后端(`auth login` / `auth register` 激活);`auth logout` 清除。
