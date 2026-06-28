@@ -1,0 +1,43 @@
+name: Sync to upstream (open source)
+
+# Mirror the main branch to the public open-source repo under the bifu-ai org.
+# bifu-ai/bifu-cli is a one-way managed mirror — never commit to it directly,
+# every push here is overwritten by this job.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sync-upstream
+  cancel-in-progress: false
+
+env:
+  UPSTREAM_REPO: bifu-ai/bifu-cli
+  UPSTREAM_BRANCH: main
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # full history for the mirror
+
+      - name: Push main to the bifu-ai upstream
+        env:
+          # PAT (or fine-grained token) with `contents: write` on ${UPSTREAM_REPO}.
+          TOKEN: ${{ secrets.UPSTREAM_SYNC_TOKEN }}
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "::error::UPSTREAM_SYNC_TOKEN secret is not set"
+            exit 1
+          fi
+          url="https://x-access-token:${TOKEN}@github.com/${UPSTREAM_REPO}.git"
+          # Force so the upstream branch always matches this repo's main exactly.
+          git push --force "$url" "HEAD:refs/heads/${UPSTREAM_BRANCH}"
+          echo "Synced $(git rev-parse --short HEAD) -> ${UPSTREAM_REPO}@${UPSTREAM_BRANCH}"

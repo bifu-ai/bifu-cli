@@ -809,6 +809,7 @@ git tag v1.2.0 && git push origin v1.2.0
 - **`.github/workflows/release.yml`**:GoReleaser 跨平台编译(darwin/linux/windows × amd64/arm64)→ 建 GitHub Release(含 checksums)→ 推 Homebrew cask 到 `decodeex/homebrew-tap` → 发 `@decodeex/bifu-cli` 到 npm。
 - **`.github/workflows/ci.yml`**:push/PR 跑 gofmt + build + vet + test + `goreleaser check`、staticcheck,以及 security 关卡(`govulncheck` 依赖/stdlib CVE + `gosec` 静态安全分析)。
 - **`.github/workflows/pages.yml`**:把 `install.sh` 同步进 `docs/` 并部署到 GitHub Pages(`cli.bifu.dev`)。
+- **`.github/workflows/sync-upstream.yml`**:`main` 有改动时,把 `main` 强制镜像到开源上游 `bifu-ai/bifu-cli`(单向托管镜像,勿直接改上游)。
 
 ### 一次性准备
 
@@ -817,6 +818,8 @@ git tag v1.2.0 && git push origin v1.2.0
 | Secret `HOMEBREW_TAP_GITHUB_TOKEN` | 对 `decodeex/homebrew-tap` 有 `repo` 权限的 PAT(GoReleaser 推 formula 用) |
 | Secret `NPM_TOKEN` | npm `@decodeex` org 的自动化发布 token |
 | 仓库 `decodeex/homebrew-tap` | 新建空仓库(GoReleaser 首次发布会写入 `Casks/bifu-cli.rb`) |
+| 仓库 `bifu-ai/bifu-cli` | 新建公开仓库(开源上游镜像;`sync-upstream.yml` 把 `main` 推到这里) |
+| Secret `UPSTREAM_SYNC_TOKEN` | 对 `bifu-ai/bifu-cli` 有 `contents: write` 权限的 PAT/细粒度 token(上游同步用) |
 | GitHub Pages | 仓库 Settings → Pages → Source 选 **GitHub Actions** |
 | DNS | 给 `cli.bifu.dev` 加 CNAME 记录指向 `decodeex.github.io`(`docs/CNAME` 已声明该域名) |
 
