@@ -5,7 +5,7 @@ LDFLAGS    := -ldflags "-X bifu-cli/cmd.version=$(VERSION) -s -w"
 
 PLUGIN_SKILLS := plugins/bifu/skills
 
-.PHONY: all build install clean tidy lint test help plugins-sync mcpb
+.PHONY: all build install clean tidy lint test help plugins-sync mcpb bump
 
 ## build: Compile bifu-cli binary to ./bin/
 build:
@@ -46,6 +46,10 @@ plugins-sync:
 ## mcpb: Build Claude Desktop .mcpb extensions (all platforms) into dist/mcpb/
 mcpb:
 	@scripts/build-mcpb.sh "$(VERSION)"
+
+## bump: Set plugin/extension manifest versions (usage: make bump VERSION=1.1.12)
+bump:
+	@scripts/sync-plugin-version.sh "$(VERSION)"
 
 ## help: Show this help
 help:

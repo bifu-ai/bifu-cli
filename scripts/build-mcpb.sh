@@ -23,8 +23,10 @@ for p in $PLATFORMS; do
   mkdir -p "$stage/server"
   CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" \
     go build -ldflags "-s -w -X bifu-cli/cmd.version=${VERSION#v}" -o "$stage/server/$bin" .
-  # Point the manifest at the platform's binary name (Windows is .exe).
+  # Point the manifest at the platform's binary name (Windows is .exe) and
+  # align its version to the build version so the .mcpb always matches the tag.
   sed "s#server/bifu-cli#server/$bin#g" "$SRC/manifest.json" > "$stage/manifest.json"
+  VER="${VERSION#v}" perl -i -pe 's/("version"\s*:\s*)"[^"]*"/$1 . "\"" . $ENV{VER} . "\""/e' "$stage/manifest.json"
   npx -y @anthropic-ai/mcpb@latest pack "$stage" "$OUTDIR/bifu_${os}_${arch}.mcpb" >/dev/null
   rm -rf "$stage"
   echo "built $OUTDIR/bifu_${os}_${arch}.mcpb"

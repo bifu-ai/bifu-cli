@@ -8,7 +8,7 @@
     {
       "name": "bifu",
       "description": "BifuFX trading — skills + MCP tools (spot, contract, forex, payments, WebSocket, orion).",
-      "version": "1.1.10",
+      "version": "1.1.12",
       "source": "./plugins/bifu",
       "category": "development",
       "tags": ["bifu", "trading", "crypto", "forex", "mcp"]

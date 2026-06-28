@@ -673,6 +673,9 @@ bifu-cli --profile dev mcp setup --client cursor          # Cursor → ~/.cursor
 bifu-cli --profile dev mcp setup --client vscode          # VS Code
 bifu-cli --profile dev mcp setup --client claude-desktop  # Claude Desktop 桌面 App
 bifu-cli mcp setup            # 不传 --client 时打印配置片段供手动添加
+
+# 多环境:一条命令注册每个环境一个 server(bifu-dev / bifu-staging / bifu-prod)
+bifu-cli mcp setup --client claude-desktop --profiles dev,staging,prod
 ```
 
 暴露的工具:`get_spot_balance`、`get_payment_balance`、`get_contract_account`、

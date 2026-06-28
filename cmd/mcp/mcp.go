@@ -78,13 +78,14 @@ is trusted.`,
 
 func newSetupCmd() *cobra.Command {
 	var clientName string
+	var profiles string
 	cmd := &cobra.Command{
 		Use:   "setup",
 		Short: "Register the bifu MCP server with an MCP client",
-		Example: `  bifu-cli --profile dev mcp setup --client claude   # Claude Code (claude mcp add)
-  bifu-cli --profile dev mcp setup --client codex    # OpenAI Codex (codex mcp add)
-  bifu-cli mcp setup --client cursor
-  bifu-cli mcp setup --client claude-desktop`,
+		Example: `  bifu-cli --profile dev mcp setup --client claude          # Claude Code, single env
+  bifu-cli mcp setup --client claude-desktop --profiles dev,staging,prod  # 3 servers bifu-dev/staging/prod
+  bifu-cli --profile dev mcp setup --client codex           # OpenAI Codex (codex mcp add)
+  bifu-cli mcp setup --client cursor`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			pr := output.NewPrinter(output.FormatTable, false)
 
@@ -92,46 +93,81 @@ func newSetupCmd() *cobra.Command {
 			if err != nil {
 				exe = "bifu-cli"
 			}
-			profile, _ := cmd.Root().PersistentFlags().GetString("profile")
-
-			serverArgs := []any{"mcp", "serve"}
-			if profile != "" {
-				serverArgs = append(serverArgs, "--profile", profile)
-			}
-			entry := map[string]any{"command": exe, "args": serverArgs}
+			rootProfile, _ := cmd.Root().PersistentFlags().GetString("profile")
+			servers := resolveServers(profiles, rootProfile)
 
 			// CLI-managed clients own their own config — register via their
 			// official `... mcp add` command (each falls back to a snippet).
 			switch clientName {
 			case "claude", "claude-code":
-				return setupClaudeCode(pr, exe, profile) // Claude Code (~/.claude.json)
+				return setupClaudeCode(pr, exe, servers) // Claude Code (~/.claude.json)
 			case "codex":
-				return setupCodex(pr, exe, profile) // OpenAI Codex (~/.codex/config.toml)
+				return setupCodex(pr, exe, servers) // OpenAI Codex (~/.codex/config.toml)
 			}
 
 			path, key, err := clientConfigPath(clientName)
 			if err != nil {
 				// Unknown client: print the snippet for manual setup.
-				snippet, _ := json.MarshalIndent(map[string]any{
-					"mcpServers": map[string]any{"bifu": entry},
-				}, "", "  ")
+				m := map[string]any{}
+				for _, s := range servers {
+					m[s.name] = map[string]any{"command": exe, "args": serveArgs(s.profile)}
+				}
+				snippet, _ := json.MarshalIndent(map[string]any{"mcpServers": m}, "", "  ")
 				pr.Line("Add this to your MCP client config:\n%s", string(snippet))
 				return nil
 			}
 
-			if err := mergeMCPConfig(path, key, entry); err != nil {
-				return fmt.Errorf("update %s: %w", path, err)
+			for _, s := range servers {
+				entry := map[string]any{"command": exe, "args": serveArgs(s.profile)}
+				if err := mergeMCPConfig(path, key, s.name, entry); err != nil {
+					return fmt.Errorf("update %s: %w", path, err)
+				}
 			}
-			pr.OK("Registered bifu MCP server in %s", path)
-			pr.Line("  Restart %s to pick it up. Server: %s mcp serve", clientName, exe)
+			pr.OK("Registered %d bifu MCP server(s) in %s", len(servers), path)
+			pr.Line("  Restart %s to pick them up.", clientName)
 			return nil
 		},
 	}
 	cmd.Flags().StringVar(&clientName, "client", "", "MCP client: claude (Claude Code) | codex | cursor | vscode | claude-desktop (omit to print a snippet)")
+	cmd.Flags().StringVar(&profiles, "profiles", "", "Comma-separated env profiles → one server each as bifu-<env> (e.g. dev,staging,prod). Default: a single 'bifu' using --profile/active.")
 	_ = cmd.RegisterFlagCompletionFunc("client", func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
 		return []string{"claude", "codex", "cursor", "vscode", "claude-desktop"}, cobra.ShellCompDirectiveNoFileComp
 	})
 	return cmd
+}
+
+// serverSpec is one MCP server entry to register: a client-visible name and the
+// bifu-cli profile it is pinned to ("" = follow the active profile).
+type serverSpec struct {
+	name    string
+	profile string
+}
+
+// resolveServers turns the --profiles flag into the set of servers to register.
+// With --profiles, one server per env named bifu-<env>; otherwise a single
+// "bifu" pinned to --profile (or the active profile when empty).
+func resolveServers(profilesCSV, rootProfile string) []serverSpec {
+	if strings.TrimSpace(profilesCSV) != "" {
+		var out []serverSpec
+		for _, p := range strings.Split(profilesCSV, ",") {
+			if p = strings.TrimSpace(p); p != "" {
+				out = append(out, serverSpec{name: "bifu-" + p, profile: p})
+			}
+		}
+		if len(out) > 0 {
+			return out
+		}
+	}
+	return []serverSpec{{name: "bifu", profile: rootProfile}}
+}
+
+// serveArgs is the `mcp serve` argument list for a profile ("" = active).
+func serveArgs(profile string) []string {
+	a := []string{"mcp", "serve"}
+	if profile != "" {
+		a = append(a, "--profile", profile)
+	}
+	return a
 }
 
 // setupClaudeCode registers the bifu MCP server with Claude Code (the `claude`
@@ -139,69 +175,64 @@ func newSetupCmd() *cobra.Command {
 // ~/.claude.json. NOTE: this is the Claude Code agent, not the Claude Desktop
 // app (that's --client claude-desktop). Falls back to a copy-paste command and
 // a project .mcp.json snippet when the claude CLI isn't on PATH.
-func setupClaudeCode(pr *output.Printer, exe, profile string) error {
-	serverCmd := []string{exe}
-	if profile != "" {
-		serverCmd = append(serverCmd, "--profile", profile)
-	}
-	serverCmd = append(serverCmd, "mcp", "serve")
-
+func setupClaudeCode(pr *output.Printer, exe string, servers []serverSpec) error {
 	claudePath, err := exec.LookPath("claude")
 	if err != nil {
-		pr.Line("Claude Code CLI not found on PATH. Once installed, run:\n\n  claude mcp add bifu -- %s\n", strings.Join(serverCmd, " "))
-		snippet, _ := json.MarshalIndent(map[string]any{
-			"mcpServers": map[string]any{"bifu": map[string]any{"command": exe, "args": serverCmd[1:]}},
-		}, "", "  ")
+		m := map[string]any{}
+		for _, s := range servers {
+			pr.Line("Claude Code CLI not found. Once installed, run:\n  claude mcp add %s -- %s %s", s.name, exe, strings.Join(serveArgs(s.profile), " "))
+			m[s.name] = map[string]any{"command": exe, "args": serveArgs(s.profile)}
+		}
+		snippet, _ := json.MarshalIndent(map[string]any{"mcpServers": m}, "", "  ")
 		pr.Line("Or add to a project .mcp.json:\n%s", string(snippet))
 		return nil
 	}
 
 	// Re-register (remove first) so a changed --profile takes effect — `claude
 	// mcp add` errors if the name already exists.
-	_ = exec.Command(claudePath, "mcp", "remove", "bifu").Run() // #nosec G204 -- fixed args
-	addArgs := append([]string{"mcp", "add", "bifu", "--"}, serverCmd...)
-	out, err := exec.Command(claudePath, addArgs...).CombinedOutput() // #nosec G204 -- fixed args; serverCmd is this binary's own path
-	if err != nil {
-		return fmt.Errorf("claude mcp add failed: %w\n%s", err, strings.TrimSpace(string(out)))
+	for _, s := range servers {
+		_ = exec.Command(claudePath, "mcp", "remove", s.name).Run() // #nosec G204 -- fixed args; s.name is bifu[-env]
+		addArgs := append([]string{"mcp", "add", s.name, "--", exe}, serveArgs(s.profile)...)
+		out, err := exec.Command(claudePath, addArgs...).CombinedOutput() // #nosec G204 -- exe is this binary's own path; args fixed
+		if err != nil {
+			return fmt.Errorf("claude mcp add %s failed: %w\n%s", s.name, err, strings.TrimSpace(string(out)))
+		}
 	}
-	pr.OK("Registered bifu MCP server with Claude Code (claude mcp add bifu)")
-	pr.Line("  Scope: local (this project). For all projects: claude mcp add -s user bifu -- %s", strings.Join(serverCmd, " "))
-	pr.Line("  Verify with: claude mcp list  (or /mcp inside Claude Code)")
+	pr.OK("Registered %d bifu MCP server(s) with Claude Code", len(servers))
+	pr.Line("  Verify with: claude mcp list  (or /mcp inside Claude Code). Add -s user to each for all projects.")
 	return nil
 }
 
 // setupCodex registers the bifu MCP server with the OpenAI Codex CLI. It prefers
 // the official `codex mcp add` (idempotent, owns ~/.codex/config.toml); if the
 // codex binary is absent it prints the TOML snippet to add manually.
-func setupCodex(pr *output.Printer, exe, profile string) error {
-	// The server command that Codex will spawn (after `--`).
-	serverCmd := []string{exe}
-	if profile != "" {
-		serverCmd = append(serverCmd, "--profile", profile)
-	}
-	serverCmd = append(serverCmd, "mcp", "serve")
-
+func setupCodex(pr *output.Printer, exe string, servers []serverSpec) error {
 	if codexPath := lookCodex(); codexPath != "" {
 		// Re-register so a changed --profile takes effect (add errors if it exists).
-		_ = exec.Command(codexPath, "mcp", "remove", "bifu").Run() // #nosec G204 -- fixed args
-		addArgs := append([]string{"mcp", "add", "bifu", "--"}, serverCmd...)
-		out, err := exec.Command(codexPath, addArgs...).CombinedOutput() // #nosec G204 -- fixed args; serverCmd is this binary's own path
-		if err != nil {
-			return fmt.Errorf("codex mcp add failed: %w\n%s", err, strings.TrimSpace(string(out)))
+		for _, s := range servers {
+			_ = exec.Command(codexPath, "mcp", "remove", s.name).Run() // #nosec G204 -- fixed args; s.name is bifu[-env]
+			addArgs := append([]string{"mcp", "add", s.name, "--", exe}, serveArgs(s.profile)...)
+			out, err := exec.Command(codexPath, addArgs...).CombinedOutput() // #nosec G204 -- exe is this binary's own path; args fixed
+			if err != nil {
+				return fmt.Errorf("codex mcp add %s failed: %w\n%s", s.name, err, strings.TrimSpace(string(out)))
+			}
 		}
-		pr.OK("Registered bifu MCP server with Codex (codex mcp add bifu)")
+		pr.OK("Registered %d bifu MCP server(s) with Codex", len(servers))
 		pr.Line("  Verify with: codex mcp list  (or /mcp in the Codex TUI)")
 		return nil
 	}
 
-	// codex not installed → print the TOML block for ~/.codex/config.toml.
-	quoted := make([]string, len(serverCmd)-1)
-	for i, a := range serverCmd[1:] {
-		quoted[i] = fmt.Sprintf("%q", a)
+	// codex not installed → print the TOML block(s) for ~/.codex/config.toml.
+	var b strings.Builder
+	for _, s := range servers {
+		args := serveArgs(s.profile)
+		quoted := make([]string, len(args))
+		for i, a := range args {
+			quoted[i] = fmt.Sprintf("%q", a)
+		}
+		fmt.Fprintf(&b, "[mcp_servers.%s]\ncommand = %q\nargs = [%s]\n\n", s.name, exe, strings.Join(quoted, ", "))
 	}
-	snippet := fmt.Sprintf("[mcp_servers.bifu]\ncommand = %q\nargs = [%s]\n", exe, strings.Join(quoted, ", "))
-	pr.Line("Codex CLI not found on PATH. Add this to ~/.codex/config.toml:\n\n%s", snippet)
-	pr.Line("(Or with Codex installed: codex mcp add bifu -- %s)", strings.Join(serverCmd, " "))
+	pr.Line("Codex CLI not found on PATH. Add this to ~/.codex/config.toml:\n\n%s", b.String())
 	return nil
 }
 
@@ -277,8 +308,8 @@ func clientConfigPath(clientName string) (path, serversKey string, err error) {
 }
 
 // mergeMCPConfig reads the client's JSON config (if any), adds/replaces the
-// "bifu" server under serversKey, and writes it back, preserving other entries.
-func mergeMCPConfig(path, serversKey string, entry map[string]any) error {
+// named server under serversKey, and writes it back, preserving other entries.
+func mergeMCPConfig(path, serversKey, name string, entry map[string]any) error {
 	cfg := map[string]any{}
 	// #nosec G304 -- path is a known MCP-client config location, not untrusted input
 	if data, err := os.ReadFile(path); err == nil && len(data) > 0 {
@@ -290,7 +321,7 @@ func mergeMCPConfig(path, serversKey string, entry map[string]any) error {
 	if !ok || servers == nil {
 		servers = map[string]any{}
 	}
-	servers["bifu"] = entry
+	servers[name] = entry
 	cfg[serversKey] = servers
 
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil { // #nosec G301 -- MCP-client config dir, not secret

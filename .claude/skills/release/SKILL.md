@@ -45,7 +45,15 @@ Never tag on `develop`. Never commit to the `bifu-ai/bifu-cli` mirror — it's o
 
 ## Cut an official release
 
-After `develop` → `main` is merged and you're on an up-to-date `main`:
+First align the plugin/extension manifest versions to the release (do this on a
+branch → develop → main, so the mirror serves the right version):
+
+```bash
+make bump VERSION=1.1.9   # seds version in plugins/** + .claude-plugin/marketplace.json
+# commit, PR to develop, merge, fast-forward main (the normal flow)
+```
+
+Then, on an up-to-date `main`:
 
 ```bash
 git switch main && git pull
@@ -53,6 +61,8 @@ git tag v1.1.9            # bump from the latest stable tag; no -rc suffix
 git push origin v1.1.9    # → release.yml: GitHub Release + npm + Homebrew + docs + mirror
 ```
 
+The `.mcpb` bundles also self-stamp the tag version at build time (build-mcpb.sh),
+so the Claude Desktop extension always matches even if `make bump` was skipped.
 Pick the version to match the rc you validated (rc `v1.1.9-rc.N` → ship `v1.1.9`).
 
 ## Verify

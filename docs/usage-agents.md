@@ -153,14 +153,22 @@ codex plugin marketplace add https://github.com/bifu-ai/bifu-cli
 codex plugin add bifu@bifu
 ```
 
-**Claude Desktop(桌面 App)不走上面这套插件系统**,用 **`.mcpb` Desktop Extension**(两个选择):
+**Claude Desktop(桌面 App)不走上面这套插件系统**(它没有 `/plugin`),用下面两种方式之一。
+前置同样要先装 `bifu-cli` 并对要用的环境 `auth login`(登录态存在 `~/.bifu-cli/config.yaml`)。
 
-1. **一键扩展(推荐)**:从 [releases](https://github.com/bifu-ai/bifu-cli/releases) 下载对应平台的
-   `bifu_<os>_<arch>.mcpb`,在 Claude Desktop「Settings → Extensions → Install Extension…」选中安装,
-   **安装时填环境**(dev/staging/prod)。**自包含**——bifu-cli 二进制已打包进去,无需先装 CLI、不依赖 PATH。
-   本地自建:`make mcpb`(产物在 `dist/mcpb/`)。
-2. **MCP 配置(免下载)**:`bifu-cli --profile dev mcp setup --client claude-desktop`
-   —— 写绝对路径进 `claude_desktop_config.json`(需先装 bifu-cli);换环境换 `--profile` 重跑。
+**方式 A — MCP 配置(推荐,已验证)**:一条命令写入 `claude_desktop_config.json`,**Cmd+Q 完全退出再重开** Claude Desktop 生效。
+
+```bash
+bifu-cli mcp setup --client claude-desktop --profiles dev,staging,prod
+```
+
+注册 `bifu-dev` / `bifu-staging` / `bifu-prod` 三个 server(按名选环境;只要单个就去掉 `--profiles`、加
+`--profile dev`,server 名为 `bifu`)。写的是 bifu-cli 的**绝对路径**(GUI 不吃 PATH)。`--profiles` 对所有客户端通用(claude / codex / cursor / vscode / claude-desktop)。
+
+**方式 B — `.mcpb` 扩展(若你的 Claude Desktop 版本支持扩展安装)**:从
+[releases](https://github.com/decodeex/bifu-cli-releases/releases/latest) 下载对应平台的
+`bifu_<os>_<arch>.mcpb`(自包含,已内置二进制),在 Claude Desktop 的扩展安装入口选中它,装时填环境。
+本地自建:`make mcpb`。⚠ 运行二进制虽已内置,但仍需上面 `auth login` 生成的会话;若你的版本没有扩展安装入口或装不上,用方式 A。
 
 ### 可用技能(10 个)
 
