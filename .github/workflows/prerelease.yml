@@ -1,0 +1,58 @@
+name: Prerelease (develop)
+
+# Every push to develop publishes an internal release-candidate build:
+# vX.Y.Z-rc.<run> (X.Y.Z = next patch after the latest stable tag). It ships as
+# a GitHub PRE-RELEASE (cross-platform binaries + checksums) to the public
+# releases repo — npm / Homebrew stay on the official stable release only.
+# After review, merge develop → main and tag vX.Y.Z for the official release.
+
+on:
+  push:
+    branches: [develop]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: prerelease
+  cancel-in-progress: true
+
+jobs:
+  prerelease:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # need tags to compute the next version
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Compute rc version
+        id: ver
+        run: |
+          latest=$(git tag --list 'v*' --sort=-v:refname | grep -vE '-' | head -1)
+          latest=${latest:-v0.0.0}
+          v=${latest#v}
+          major=${v%%.*}; rest=${v#*.}; minor=${rest%%.*}; patch=${rest#*.}
+          tag="v${major}.${minor}.$((patch + 1))-rc.${{ github.run_number }}"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "Prerelease tag: $tag (base stable: $latest)"
+
+      - name: Tag locally for GoReleaser
+        run: git tag "${{ steps.ver.outputs.tag }}"
+
+      - name: Run GoReleaser (prerelease)
+        uses: goreleaser/goreleaser-action@v7
+        with:
+          version: latest
+          args: release --clean
+        env:
+          # Publishes the GitHub pre-release to the public decodeex/bifu-cli-releases
+          # repo (release.prerelease=auto marks rc tags as pre-release). The cask
+          # upload is skipped for prereleases (skip_upload: auto in .goreleaser.yaml).
+          GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}

@@ -809,7 +809,10 @@ git tag v1.2.0 && git push origin v1.2.0
 - **`.github/workflows/release.yml`**:GoReleaser 跨平台编译(darwin/linux/windows × amd64/arm64)→ 建 GitHub Release(含 checksums)→ 推 Homebrew cask 到 `decodeex/homebrew-tap` → 发 `@decodeex/bifu-cli` 到 npm。
 - **`.github/workflows/ci.yml`**:push/PR 跑 gofmt + build + vet + test + `goreleaser check`、staticcheck,以及 security 关卡(`govulncheck` 依赖/stdlib CVE + `gosec` 静态安全分析)。
 - **`.github/workflows/pages.yml`**:把 `install.sh` 同步进 `docs/` 并部署到 GitHub Pages(`cli.bifu.dev`)。
+- **`.github/workflows/prerelease.yml`**:每次推 `develop` → 发内部预发布 `vX.Y.Z-rc.<run>`(X.Y.Z=最新正式版的下一个 patch),作为 **GitHub Pre-release**(跨平台二进制+checksums)发到 releases 仓库;**不推 npm/brew**。审核通过后合并 `develop`→`main` 并打 `vX.Y.Z` 走正式发布。
 - **`.github/workflows/sync-upstream.yml`**:`main` 有改动时,把 `main` 强制镜像到开源上游 `bifu-ai/bifu-cli`(单向托管镜像,勿直接改上游)。
+
+> 发布通道:`develop` 推送 = rc 预发布(仅 GitHub Pre-release 二进制,供审核);`vX.Y.Z` tag(在 main 上)= 正式版(GitHub Release + npm + Homebrew + 文档同步)。`install.sh` 的 `releases/latest` 只取正式版,不会拿到 rc。
 
 ### 一次性准备
 

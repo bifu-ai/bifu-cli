@@ -36,6 +36,8 @@ jobs:
 
   sync-public:
     needs: goreleaser
+    # Stable releases only — prerelease (rc/beta) tags skip docs/npm.
+    if: ${{ !contains(github.ref_name, '-') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -64,6 +66,8 @@ jobs:
 
   npm-publish:
     needs: goreleaser
+    # Stable releases only — prerelease (rc/beta) tags are GitHub-prerelease-only.
+    if: ${{ !contains(github.ref_name, '-') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7

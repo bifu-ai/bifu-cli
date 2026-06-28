@@ -50,6 +50,9 @@ changelog:
 
 homebrew_casks:
   - name: bifu-cli
+    # Don't push a cask for prereleases/snapshots (rc builds) — Homebrew tracks
+    # the official stable release only.
+    skip_upload: "auto"
     binaries:
       - bifu-cli
     repository:
