@@ -138,6 +138,19 @@ echo 123456 | bifu-cli --profile dev auth login --username you@example.com --pas
 
 > 任何命令返回 **401** = 会话过期 → 重新 `auth login`。
 
+### 注册 / 登出
+
+```bash
+# 注册:邮箱+密码 → 邮箱验证码 → 激活即登录(dev 验证码固定 123456)
+bifu-cli --profile dev auth register --email you@example.com
+echo 123456 | bifu-cli --profile dev auth register --email you@example.com --password 'Pw123!@#'
+
+# 登出:服务端失效会话 + 清除本地 profile 的 cookie
+bifu-cli --profile dev auth logout
+```
+
+> 注册成功后会话直接落盘(等于已登录),并把活跃 profile 切到该 profile。
+
 ---
 
 ## 4. 常用命令
