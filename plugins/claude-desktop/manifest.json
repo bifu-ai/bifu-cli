@@ -1,0 +1,36 @@
+{
+  "manifest_version": "0.2",
+  "name": "bifu",
+  "display_name": "BifuFX",
+  "version": "1.1.10",
+  "description": "BifuFX trading — read balances/positions/orders and place or cancel spot & contract orders via the bifu-cli MCP server.",
+  "long_description": "Exposes the BifuFX trading platform to Claude Desktop through the bifu-cli MCP server: spot, contract, forex (MT5/TradFi), payments, WebSocket and orion signals. Pick the environment (dev / staging / prod) at install time.",
+  "author": {
+    "name": "BifuFX",
+    "url": "https://cli.bifu.dev"
+  },
+  "homepage": "https://cli.bifu.dev",
+  "documentation": "https://github.com/bifu-ai/bifu-cli",
+  "license": "MIT",
+  "keywords": ["bifu", "trading", "crypto", "forex", "mcp"],
+  "server": {
+    "type": "binary",
+    "entry_point": "server/bifu-cli",
+    "mcp_config": {
+      "command": "${__dirname}/server/bifu-cli",
+      "args": ["--profile", "${user_config.profile}", "mcp", "serve"]
+    }
+  },
+  "user_config": {
+    "profile": {
+      "type": "string",
+      "title": "Environment",
+      "description": "Which bifu-cli profile to trade on: dev (test funds), staging, or prod (real money). Create and log in first: bifu-cli config init --profile <env> --env <env> && bifu-cli --profile <env> auth login",
+      "default": "dev",
+      "required": true
+    }
+  },
+  "compatibility": {
+    "platforms": ["darwin", "win32", "linux"]
+  }
+}

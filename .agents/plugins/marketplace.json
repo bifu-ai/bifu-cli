@@ -1,0 +1,17 @@
+{
+  "name": "bifu",
+  "plugins": [
+    {
+      "name": "bifu",
+      "source": {
+        "source": "local",
+        "path": "./plugins/bifu"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

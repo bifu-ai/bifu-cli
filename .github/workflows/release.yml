@@ -36,6 +36,32 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
           HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
 
+  desktop-extension:
+    needs: goreleaser
+    # Canonical repo only — build the Claude Desktop .mcpb bundles (one per
+    # platform, each bundling the matching binary) and attach to the release.
+    if: ${{ github.repository == 'decodeex/bifu-cli' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "20"
+      - name: Build .mcpb bundles
+        run: scripts/build-mcpb.sh "${GITHUB_REF_NAME}"
+      - name: Attach .mcpb bundles to the release
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+        run: |
+          gh release upload "${GITHUB_REF_NAME}" dist/mcpb/*.mcpb \
+            --repo decodeex/bifu-cli-releases --clobber
+
   sync-public:
     needs: goreleaser
     # Canonical repo + stable releases only — prerelease (rc/beta) tags skip docs/npm.

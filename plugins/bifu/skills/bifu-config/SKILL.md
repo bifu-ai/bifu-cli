@@ -1,0 +1,37 @@
+---
+name: bifu-config
+description: Configure bifu-cli — create/switch profiles, set endpoints, pick the environment (dev/staging/prod).
+auth: none
+---
+
+# bifu-cli: configuration & profiles
+
+Activate to set up bifu-cli, switch environments, or inspect/override endpoints.
+Profiles live in `~/.bifu-cli/config.yaml`; each profile holds endpoints + the
+session cookie. Use `-p/--profile <name>` to target one per command. After
+configuring, sign in with the bifu-auth skill.
+
+## Initialise & switch
+
+```bash
+bifu-cli config init --env dev          # presets: dev | staging | prod | custom
+bifu-cli config init --profile myprod --env prod
+bifu-cli config use dev                 # set active profile
+bifu-cli config list                    # list profiles
+bifu-cli config get                     # show active profile (cookie masked)
+bifu-cli config delete myenv
+```
+
+## Override fields
+
+```bash
+bifu-cli config set --base-url https://fxapi.bifu.dev
+bifu-cli config set --web-url https://bifu.dev
+bifu-cli config set --profile staging --forex-http https://fxapi.staging.bifu.co
+```
+
+Env presets fill base/web/WS/pushgw URLs: `dev`→bifu.dev, `staging`→staging.bifu.co,
+`prod`→bifu.co.
+
+## Notes
+- Global flags: `-p/--profile`, `-o/--output table|json|plain`, `--json`, `-v/--verbose`, `-y/--yes`.

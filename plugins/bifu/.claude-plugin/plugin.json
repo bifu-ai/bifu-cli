@@ -1,0 +1,28 @@
+{
+  "name": "bifu",
+  "version": "1.1.10",
+  "description": "BifuFX trading platform — spot, contract, forex (MT5/TradFi), payments, WebSocket and orion signals, exposed as agent skills and MCP tools.",
+  "author": {
+    "name": "BifuFX",
+    "url": "https://cli.bifu.dev"
+  },
+  "homepage": "https://cli.bifu.dev",
+  "repository": "https://github.com/bifu-ai/bifu-cli",
+  "license": "MIT",
+  "keywords": ["bifu", "trading", "crypto", "forex", "spot", "contract", "mcp"],
+  "skills": "./skills/",
+  "mcpServers": {
+    "bifu-dev": {
+      "command": "bifu-cli",
+      "args": ["--profile", "dev", "mcp", "serve"]
+    },
+    "bifu-staging": {
+      "command": "bifu-cli",
+      "args": ["--profile", "staging", "mcp", "serve"]
+    },
+    "bifu-prod": {
+      "command": "bifu-cli",
+      "args": ["--profile", "prod", "mcp", "serve"]
+    }
+  }
+}

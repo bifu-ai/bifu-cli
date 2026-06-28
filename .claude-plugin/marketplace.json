@@ -1,0 +1,17 @@
+{
+  "name": "bifu",
+  "owner": {
+    "name": "BifuFX",
+    "url": "https://cli.bifu.dev"
+  },
+  "plugins": [
+    {
+      "name": "bifu",
+      "description": "BifuFX trading — skills + MCP tools (spot, contract, forex, payments, WebSocket, orion).",
+      "version": "1.1.10",
+      "source": "./plugins/bifu",
+      "category": "development",
+      "tags": ["bifu", "trading", "crypto", "forex", "mcp"]
+    }
+  ]
+}

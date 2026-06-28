@@ -18,6 +18,9 @@ on:
       - "README.md"
       - "LICENSE"
       - ".gitignore"
+      - "plugins/**" # Claude/Codex plugin package (not compiled into the binary)
+      - ".claude-plugin/**"
+      - ".agents/**"
   workflow_dispatch: {}
 
 permissions:

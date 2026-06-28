@@ -1,0 +1,29 @@
+{
+  "name": "bifu",
+  "version": "1.1.10",
+  "description": "BifuFX trading platform — spot, contract, forex (MT5/TradFi), payments, WebSocket and orion signals, exposed as agent skills and MCP tools.",
+  "author": {
+    "name": "BifuFX",
+    "url": "https://cli.bifu.dev"
+  },
+  "homepage": "https://cli.bifu.dev",
+  "repository": "https://github.com/bifu-ai/bifu-cli",
+  "license": "MIT",
+  "keywords": ["bifu", "trading", "crypto", "forex", "spot", "contract", "mcp"],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "BifuFX",
+    "shortDescription": "Trade spot/contract/forex via bifu-cli",
+    "longDescription": "Read balances/positions/orders and place or cancel spot & contract orders on the BifuFX platform through the bifu-cli MCP server, plus skills covering auth, config, forex, payments, WebSocket streams and orion signals.",
+    "developerName": "BifuFX",
+    "category": "Productivity",
+    "capabilities": ["Interactive", "Write"],
+    "websiteURL": "https://cli.bifu.dev",
+    "defaultPrompt": [
+      "查询我在 bifu 的余额",
+      "BTCUSDT 现在多少钱",
+      "在 dev 上市价买入 0.001 BTCUSDT"
+    ]
+  }
+}

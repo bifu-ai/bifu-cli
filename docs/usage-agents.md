@@ -30,12 +30,13 @@ npm i -g @decodeex/bifu-cli
 
 ---
 
-## 2. 给 AI 代理接入(两条路:Skills + MCP)
+## 2. 给 AI 代理接入(Skills + MCP,或一键插件)
 
 - **Skills**:`SKILL.md` 指南,告诉代理「何时用、怎么用 bifu-cli」(适合让代理用命令行)。
 - **MCP**:`bifu-cli mcp serve` 把交易能力暴露成 MCP 工具(适合让代理直接调用工具)。
+- **插件(Plugins)**:把 skills + MCP 打包成一个插件,Claude Code / Codex 一条命令装好(见 §2.5)。
 
-两者可同时用:MCP 提供工具,skills 提供使用说明。
+三者可叠加用:MCP 提供工具,skills 提供使用说明,插件把两者一键装好。
 
 ### 2.1 Claude Code
 
@@ -130,6 +131,36 @@ claude mcp add --transport http bifu http://127.0.0.1:8080/mcp
 
 > **安全**:HTTP 传输按**当前 profile 的登录会话**执行,且**没有逐请求鉴权** ——
 > 务必绑定 `127.0.0.1`(本机),除非在可信网络;对外暴露需自行在前面加鉴权网关。
+
+### 2.5 一键插件(Claude Code / Codex / Claude Desktop)
+
+仓库 `plugins/bifu/` 把 **10 个 skills + MCP server** 打包成插件,同一份同时是
+Claude Code 插件(`.claude-plugin/plugin.json`)和 Codex 插件(`.codex-plugin/plugin.json`),
+内含三个按环境钉死的 MCP server:**`bifu-dev` / `bifu-staging` / `bifu-prod`**(装一次,
+三环境都在;agent 按 server 名选,`bifu-prod` 是真金账户)。仓库根的
+`.claude-plugin/marketplace.json` 与 `.agents/plugins/marketplace.json` 让公开镜像
+`bifu-ai/bifu-cli` 直接当 marketplace。
+
+> 前置:插件不内置二进制,先装 `bifu-cli`(curl/brew/npm)并为要用的环境 `config init` + `auth login`。
+
+```bash
+# Claude Code(CLI / IDE 扩展)
+/plugin marketplace add bifu-ai/bifu-cli
+/plugin install bifu@bifu
+
+# Codex —— CLI 与桌面版 Codex.app 共享 ~/.codex,装一次两端都生效
+codex plugin marketplace add https://github.com/bifu-ai/bifu-cli
+codex plugin add bifu@bifu
+```
+
+**Claude Desktop(桌面 App)不走上面这套插件系统**,用 **`.mcpb` Desktop Extension**(两个选择):
+
+1. **一键扩展(推荐)**:从 [releases](https://github.com/bifu-ai/bifu-cli/releases) 下载对应平台的
+   `bifu_<os>_<arch>.mcpb`,在 Claude Desktop「Settings → Extensions → Install Extension…」选中安装,
+   **安装时填环境**(dev/staging/prod)。**自包含**——bifu-cli 二进制已打包进去,无需先装 CLI、不依赖 PATH。
+   本地自建:`make mcpb`(产物在 `dist/mcpb/`)。
+2. **MCP 配置(免下载)**:`bifu-cli --profile dev mcp setup --client claude-desktop`
+   —— 写绝对路径进 `claude_desktop_config.json`(需先装 bifu-cli);换环境换 `--profile` 重跑。
 
 ### 可用技能(10 个)
 

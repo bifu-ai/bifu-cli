@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "bifu-dev": {
+      "command": "bifu-cli",
+      "args": ["--profile", "dev", "mcp", "serve"]
+    },
+    "bifu-staging": {
+      "command": "bifu-cli",
+      "args": ["--profile", "staging", "mcp", "serve"]
+    },
+    "bifu-prod": {
+      "command": "bifu-cli",
+      "args": ["--profile", "prod", "mcp", "serve"]
+    }
+  }
+}
