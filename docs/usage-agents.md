@@ -142,6 +142,8 @@ Claude Code 插件(`.claude-plugin/plugin.json`)和 Codex 插件(`.codex-plugin/
 `bifu-ai/bifu-cli` 直接当 marketplace。
 
 > 前置:插件不内置二进制,先装 `bifu-cli`(curl/brew/npm)并为要用的环境 `config init` + `auth login`。
+> 插件运行时调 **PATH 上的 `bifu-cli`**,记得保持它是最新版(`npm i -g @decodeex/bifu-cli@latest` /
+> `brew upgrade --cask bifu-cli`),否则跑的是旧二进制。
 
 ```bash
 # Claude Code(CLI / IDE 扩展)
@@ -151,7 +153,13 @@ Claude Code 插件(`.claude-plugin/plugin.json`)和 Codex 插件(`.codex-plugin/
 # Codex —— CLI 与桌面版 Codex.app 共享 ~/.codex,装一次两端都生效
 codex plugin marketplace add https://github.com/bifu-ai/bifu-cli
 codex plugin add bifu@bifu
+# 重启 Codex(CLI/App)生效。验证:
+codex plugin list      # → bifu@bifu  installed, enabled  1.1.x
+codex mcp list         # → bifu-dev / bifu-staging / bifu-prod  enabled
 ```
+
+> `codex` 不在 PATH 时(只装了 Codex.app),用包内二进制:
+> `/Applications/Codex.app/Contents/Resources/codex plugin add bifu@bifu`。
 
 **Claude Desktop(桌面 App)不走上面这套插件系统**(它没有 `/plugin`),用下面两种方式之一。
 前置同样要先装 `bifu-cli` 并对要用的环境 `auth login`(登录态存在 `~/.bifu-cli/config.yaml`)。
