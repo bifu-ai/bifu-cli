@@ -9,6 +9,15 @@ name: Prerelease (develop)
 on:
   push:
     branches: [develop]
+    # Skip rc builds for changes that don't affect the binary. NOTE: the embedded
+    # end-user skills live in skills/**/SKILL.md (compiled into the binary), so
+    # those are intentionally NOT ignored; .claude/** and top-level docs are.
+    paths-ignore:
+      - ".claude/**"
+      - "docs/**"
+      - "README.md"
+      - "LICENSE"
+      - ".gitignore"
   workflow_dispatch: {}
 
 permissions:
