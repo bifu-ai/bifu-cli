@@ -798,15 +798,53 @@ bifu-cli skills install ./my-agent/skills          # 自定义目录(默认 ./bi
 
 ---
 
+## plugins — 一键插件（Claude Code / Codex / Claude Desktop）
+
+`plugins/bifu/` 把 **10 个 skills + MCP server** 打成一个插件,同一份既是 Claude Code 插件
+(`.claude-plugin/plugin.json`)又是 Codex 插件(`.codex-plugin/plugin.json`),内含三个按环境
+钉死的 MCP server:**`bifu-dev` / `bifu-staging` / `bifu-prod`**(装一次三环境都在,`bifu-prod` 是真金账户)。
+仓库根的 `.claude-plugin/marketplace.json` 与 `.agents/plugins/marketplace.json` 让公开镜像
+[`bifu-ai/bifu-cli`](https://github.com/bifu-ai/bifu-cli) 直接当 marketplace。
+
+> 前置:插件调 **PATH 上的 `bifu-cli`**(不内置二进制),先装好并保持最新,再对要用的环境 `auth login`。
+
+```bash
+# Claude Code（CLI / IDE 扩展）—— 装完 claude mcp list 应见 bifu-dev/staging/prod ✓ Connected
+/plugin marketplace add bifu-ai/bifu-cli
+/plugin install bifu@bifu
+
+# Codex（CLI 与桌面版 Codex.app 共享 ~/.codex，装一次两端都生效）—— 装完重启 Codex 生效
+codex plugin marketplace add https://github.com/bifu-ai/bifu-cli
+codex plugin add bifu@bifu
+```
+
+**Claude Desktop**(桌面 App,无 `/plugin`)两种方式:
+
+```bash
+# 方式 A（推荐）：写 MCP 配置，Cmd+Q 完全退出再重开 Claude Desktop 生效
+bifu-cli mcp setup --client claude-desktop --profiles dev,staging,prod
+
+# 方式 B：.mcpb 扩展（自包含，已内置二进制）——从 releases 下载对应平台的 bifu_<os>_<arch>.mcpb
+#   https://github.com/decodeex/bifu-cli-releases/releases/latest  （本地自建：make mcpb）
+```
+
+发版时每平台一个 `.mcpb` 会自动构建并挂到 release;`--profiles` 对所有客户端通用。
+详尽四端安装说明见 [docs/usage-agents.md](docs/usage-agents.md) 的 §2.5。
+
+---
+
 ## Makefile 命令
 
 ```bash
-make build      # 编译到 bin/bifu-cli
-make install    # 安装到 $GOPATH/bin
-make tidy       # go mod tidy
-make clean      # 清理编译产物
-make test       # 运行单元测试
-make lint       # 静态分析（需安装 staticcheck）
+make build         # 编译到 bin/bifu-cli
+make install       # 安装到 $GOPATH/bin
+make tidy          # go mod tidy
+make clean         # 清理编译产物
+make test          # 运行单元测试
+make lint          # 静态分析（需安装 staticcheck）
+make plugins-sync  # 从 skills/ 重新生成 plugins/bifu/skills/
+make mcpb          # 构建各平台 Claude Desktop .mcpb（dist/mcpb/）
+make bump VERSION=1.1.13  # 同步所有插件/扩展清单版本号
 ```
 
 ---
