@@ -19,6 +19,8 @@ brew install decodeex/tap/bifu-cli
 npm i -g @decodeex/bifu-cli
 ```
 
+验证版本:`bifu-cli version`。检查/升级:`bifu-cli version --check`、`bifu-cli upgrade`(按安装方式 brew/npm/curl 自动升级,`-y` 免确认)。
+
 从源码编译(需要 Go 1.25+):
 
 ```bash
@@ -33,8 +35,8 @@ make install        # 或安装到 $GOPATH/bin
 ## 快速开始
 
 ```bash
-# 1. 初始化 dev 环境配置
-bifu-cli config init --env dev
+# 1. 创建并初始化 dev 环境 profile
+bifu-cli config init --profile dev --env dev
 
 # 2. 登录并自动保存 Cookie（推荐）
 bifu-cli --profile dev auth login
@@ -60,6 +62,7 @@ bifu-cli forex order create --login-id 90390034 --symbol EURUSD --type buy --vol
 |------|------|--------|------|
 | `--profile` | `-p` | `default` | 使用的配置 Profile |
 | `--output` | `-o` | `table` | 输出格式：`table` / `json` / `plain` |
+| `--json` | — | `false` | `--output json` 的快捷方式 |
 | `--verbose` | `-v` | `false` | 开启调试输出 |
 | `--yes` | `-y` | `false` | 跳过危险操作的二次确认（撤销全部挂单等） |
 
@@ -95,20 +98,17 @@ bifu-cli config init --profile myprod --env prod
 
 ### 修改配置
 
-> 现货 / 合约 / 支付 / 外汇所有认证接口统一使用 `bifu-cli auth login` 获取的会话 Cookie，无需单独配置 API Key。
+> 会话 Cookie 由 `bifu-cli auth login` / `auth register` 自动写入,无需手动设置(后端会校验会话,手动粘贴的 cookie 不构成有效登录)。`config set` 一般只用来调端点。
 
 ```bash
-# 设置 Cookie 认证（现货/合约/支付/外汇通用，推荐用 auth login 自动写入）
-bifu-cli config set --auth-cookie "user_auth_name=eyJhbGc..."
+# 修改 Base URL
+bifu-cli config set --base-url https://fxapi.bifu.dev
 
 # 设置外汇 HTTP 地址（可选）
 bifu-cli config set --forex-http https://fxapi.bifu.dev
 
-# 修改 Base URL
-bifu-cli config set --base-url https://fxapi.bifu.dev
-
 # 指定特定 profile 修改
-bifu-cli config set --profile staging --auth-cookie "..."
+bifu-cli config set --profile staging --base-url https://fxapi.staging.bifu.co
 ```
 
 ### Profile 管理
@@ -131,7 +131,8 @@ bifu-cli config delete myenv
 
 ## auth — 认证管理
 
-外汇（forex）和支付（payment）接口使用 `user_auth_name` Cookie 认证。
+现货 / 合约 / 支付 / 外汇所有接口统一用 `auth login`(或 `auth register`)拿到的会话 Cookie。
+Cookie 名按环境而异(dev=`user_auth_name`、staging/prod 不同),登录时自动捕获并存入 profile。
 
 ### auth login — 邮箱密码登录（推荐）
 
@@ -180,8 +181,8 @@ Scan this QR code with the Bifu app (already logged in) to approve:
 Or open this link on your phone:
   https://bifu.dev/x/e358e641-...
 
-Waiting for approval...
-✓ Authentication complete. Cookie saved to profile "dev"
+Waiting for approval (expires in 2 min)...
+✓ Authentication complete. Session saved and active profile set to "dev"
   user_id : 109150807
 ```
 
@@ -192,6 +193,29 @@ Waiting for approval...
 > 也可以在手机上直接打开二维码下方的链接(由 App 拦截处理)。
 > 批准动作由 App 完成(调 `qr_code_scan` + `qr_code_confirm`)。端点契约见 [docs/device-flow.md](docs/device-flow.md)。
 > 已在 dev 环境端到端验证通过。
+
+### auth register — 注册新账户
+
+邮箱 + 密码注册,邮箱验证码激活;激活成功即返回会话 cookie(等于已登录),并把活跃 profile 切到该 profile。
+
+```bash
+# 交互式(密码隐藏输入)
+bifu-cli --profile dev auth register --email you@example.com
+
+# 非交互(CI;dev 验证码固定 123456)
+echo 123456 | bifu-cli --profile dev auth register --email you@example.com --password 'Pw123!@#'
+# 可选:--referrer <邀请码>
+```
+
+> 流程:`POST /user/register`(email/password)→ 邮箱验证码 → `POST /user/activate` 返回会话 cookie 落盘。
+
+### auth logout — 登出
+
+服务端失效会话(`POST /user/logout`)+ 清除本地 profile 的 `auth_cookie` / `auth_cookie_name` / `user_id`。
+
+```bash
+bifu-cli --profile dev auth logout
+```
 
 ---
 
@@ -753,9 +777,9 @@ bifu-cli skills install --client cursor            # → .cursor/rules/<name>.md
 bifu-cli skills install ./my-agent/skills          # 自定义目录(默认 ./bifu-skills)
 ```
 
-内置 9 个技能:`bifu-auth`(登录)、`bifu-config`(配置/Profile)、`bifu-spot`、
+内置 10 个技能:`bifu-auth`(登录)、`bifu-config`(配置/Profile)、`bifu-spot`、
 `bifu-contract`、`bifu-forex-trade`、`bifu-forex-account`、`bifu-payment`、
-`bifu-market-stream`(公共行情)、`bifu-private-stream`(私有/外汇推送)。
+`bifu-market-stream`(公共行情)、`bifu-private-stream`(私有/外汇推送)、`bifu-orion`(信号订阅)。
 
 配合 `bifu-cli mcp`(MCP server)使用:agent 通过 MCP 调用工具,用 skills 理解每类任务的用法。
 
@@ -782,8 +806,8 @@ make lint       # 静态分析（需安装 staticcheck）
 git tag v1.2.0 && git push origin v1.2.0
 ```
 
-- **`.github/workflows/release.yml`**:GoReleaser 跨平台编译(darwin/linux/windows × amd64/arm64)→ 建 GitHub Release(含 checksums)→ 推 Homebrew formula 到 `decodeex/homebrew-tap` → 发 `@decodeex/bifu-cli` 到 npm。
-- **`.github/workflows/ci.yml`**:push/PR 跑 build + vet + test + `goreleaser check` + staticcheck。
+- **`.github/workflows/release.yml`**:GoReleaser 跨平台编译(darwin/linux/windows × amd64/arm64)→ 建 GitHub Release(含 checksums)→ 推 Homebrew cask 到 `decodeex/homebrew-tap` → 发 `@decodeex/bifu-cli` 到 npm。
+- **`.github/workflows/ci.yml`**:push/PR 跑 gofmt + build + vet + test + `goreleaser check`、staticcheck,以及 security 关卡(`govulncheck` 依赖/stdlib CVE + `gosec` 静态安全分析)。
 - **`.github/workflows/pages.yml`**:把 `install.sh` 同步进 `docs/` 并部署到 GitHub Pages(`cli.bifu.dev`)。
 
 ### 一次性准备
@@ -792,7 +816,7 @@ git tag v1.2.0 && git push origin v1.2.0
 |------|------|
 | Secret `HOMEBREW_TAP_GITHUB_TOKEN` | 对 `decodeex/homebrew-tap` 有 `repo` 权限的 PAT(GoReleaser 推 formula 用) |
 | Secret `NPM_TOKEN` | npm `@decodeex` org 的自动化发布 token |
-| 仓库 `decodeex/homebrew-tap` | 新建空仓库(GoReleaser 首次发布会写入 `Formula/bifu-cli.rb`) |
+| 仓库 `decodeex/homebrew-tap` | 新建空仓库(GoReleaser 首次发布会写入 `Casks/bifu-cli.rb`) |
 | GitHub Pages | 仓库 Settings → Pages → Source 选 **GitHub Actions** |
 | DNS | 给 `cli.bifu.dev` 加 CNAME 记录指向 `decodeex.github.io`(`docs/CNAME` 已声明该域名) |
 
