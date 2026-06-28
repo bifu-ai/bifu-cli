@@ -34,8 +34,8 @@ jobs:
           TOKEN: ${{ secrets.UPSTREAM_SYNC_TOKEN }}
         run: |
           if [ -z "$TOKEN" ]; then
-            echo "::error::UPSTREAM_SYNC_TOKEN secret is not set"
-            exit 1
+            echo "::warning::UPSTREAM_SYNC_TOKEN not set — skipping upstream sync. Add a PAT with contents:write on ${UPSTREAM_REPO} to enable it."
+            exit 0
           fi
           url="https://x-access-token:${TOKEN}@github.com/${UPSTREAM_REPO}.git"
           # Force so the upstream branch always matches this repo's main exactly.
