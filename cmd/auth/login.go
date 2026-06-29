@@ -14,6 +14,7 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
+	"bifu-cli/internal/client"
 	"bifu-cli/internal/clifconfig"
 )
 
@@ -71,6 +72,13 @@ Backed by the existing scan-to-login endpoints
 				fmt.Print("Username (email): ")
 				line, _ := reader.ReadString('\n')
 				username = strings.TrimSpace(line)
+			}
+
+			// Prefer an env var over the --password flag for non-interactive use:
+			// a flag value lands in the process list and shell history
+			// (BIFU-CLI-202606-019).
+			if password == "" {
+				password = os.Getenv("BIFU_PASSWORD")
 			}
 
 			if password == "" {
@@ -159,7 +167,7 @@ Backed by the existing scan-to-login endpoints
 	}
 
 	cmd.Flags().StringVarP(&username, "username", "u", "", "Email / username")
-	cmd.Flags().StringVar(&password, "password", "", "Password (omit to be prompted securely)")
+	cmd.Flags().StringVar(&password, "password", "", "Password (omit to be prompted securely; or set BIFU_PASSWORD for CI — avoid passing on the command line)")
 	cmd.Flags().BoolVar(&device, "device", false, "Scan-to-login (like gh auth login): print a QR, scan with the Bifu app, poll for the cookie")
 	return cmd
 }
@@ -219,9 +227,13 @@ func runDeviceLogin(load LoadFn) error {
 	}
 
 	// Prefer the profile's web host so the QR points at the right environment
-	// (qr_code_get returns a hard-coded prod URL).
+	// (qr_code_get returns a hard-coded prod URL). Require https for the approval
+	// URL so the issueID isn't carried over cleartext (BIFU-CLI-202606-012).
 	scanURL := qrURL
 	if profile.WebURL != "" {
+		if !strings.HasPrefix(profile.WebURL, "https://") {
+			return fmt.Errorf("web_url must be https:// for device login (got %q) — fix it with `bifu-cli config set --web-url https://...`", profile.WebURL)
+		}
 		scanURL = strings.TrimRight(profile.WebURL, "/") + "/x/" + issueID
 	}
 
@@ -311,7 +323,7 @@ func qrCodeGet(baseURL, terminalType string) (issueID, url string, err error) {
 	}
 	setLoginHeaders(req, terminalType)
 
-	c := &http.Client{Timeout: 30 * time.Second}
+	c := client.NewSecureHTTPClient(30 * time.Second)
 	resp, err := c.Do(req)
 	if err != nil {
 		return "", "", err
@@ -342,7 +354,7 @@ func qrCodeCheck(baseURL, issueID, terminalType string) (status, cookieName, coo
 	req.Header.Set("Content-Type", "application/json")
 	setLoginHeaders(req, terminalType)
 
-	c := &http.Client{Timeout: 30 * time.Second}
+	c := client.NewSecureHTTPClient(30 * time.Second)
 	resp, err := c.Do(req)
 	if err != nil {
 		return "", "", "", "", err
@@ -383,9 +395,34 @@ func extractCookie(cookieStr string) (name, value string) {
 		Value string `json:"Value"`
 	}
 	if err := json.Unmarshal([]byte(cookieStr), &ck); err == nil && ck.Value != "" {
-		return ck.Name, ck.Value
+		// Don't blindly trust the server-supplied cookie name
+		// (BIFU-CLI-202606-026): a malformed/hostile name could later be
+		// interpolated into a Cookie header. Accept only a safe token charset;
+		// otherwise fall back to the known default name.
+		if isValidCookieName(ck.Name) {
+			return ck.Name, ck.Value
+		}
+		return "user_auth_name", ck.Value
 	}
 	return "user_auth_name", cookieStr
+}
+
+// isValidCookieName reports whether name is a safe RFC 6265 cookie token:
+// non-empty, bounded length, and free of separators/control characters that
+// could break or inject into a Cookie header.
+func isValidCookieName(name string) bool {
+	if name == "" || len(name) > 128 {
+		return false
+	}
+	for _, r := range name {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9':
+		case r == '_' || r == '-' || r == '.':
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 // devicePollInterval is how long the CLI waits between approval polls. It is a
@@ -424,7 +461,7 @@ func doLogin(baseURL, username, password, terminalType string) (issueID string, 
 	req.Header.Set("locale", "en")
 	req.Header.Set("appVersion", "1.0.0")
 
-	c := &http.Client{Timeout: 30 * time.Second}
+	c := client.NewSecureHTTPClient(30 * time.Second)
 	resp, err := c.Do(req)
 	if err != nil {
 		return "", err
@@ -479,7 +516,7 @@ func doLoginCheck(baseURL, issueID, code, terminalType string) (cookieName, cook
 	req.Header.Set("locale", "en")
 	req.Header.Set("appVersion", "1.0.0")
 
-	c := &http.Client{Timeout: 30 * time.Second}
+	c := client.NewSecureHTTPClient(30 * time.Second)
 	resp, err := c.Do(req)
 	if err != nil {
 		return "", "", "", err

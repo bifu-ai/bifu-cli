@@ -1,7 +1,7 @@
 package client
 
 import (
-	"crypto/tls"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -10,7 +10,7 @@ import (
 
 	"bifu-cli/internal/clifconfig"
 
-	"github.com/gorilla/websocket"
+	"github.com/coder/websocket"
 )
 
 // WSMessage is a generic inbound WebSocket message.
@@ -18,13 +18,17 @@ type WSMessage struct {
 	Raw []byte
 }
 
-// Keepalive tuning: the client sends a ping every pingPeriod and expects any
-// frame (pong or data) within pongWait, otherwise the read deadline fires and
-// the connection is torn down. Reconnect is intentionally NOT handled here —
-// the caller decides whether to redial.
+// Keepalive tuning: the client sends a ping every pingPeriod and treats a peer
+// that doesn't answer within pongWait as dead. coder/websocket's Ping blocks
+// until the pong arrives (or the context expires), so a missed pong tears the
+// connection down. Reconnect is intentionally NOT handled here — the caller
+// decides whether to redial.
 const (
 	pingPeriod = 20 * time.Second
 	pongWait   = 60 * time.Second
+	// maxMessageBytes bounds a single inbound frame so a hostile/buggy peer can't
+	// force unbounded memory growth.
+	maxMessageBytes = 4 << 20 // 4 MiB
 )
 
 // WSClient manages a single WebSocket connection with an auto-ping keepalive.
@@ -87,29 +91,23 @@ func (c *WSClient) Connect() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	dialer := websocket.Dialer{
-		// Force HTTP/1.1 — WebSocket upgrade is incompatible with HTTP/2 (ALPN h2).
-		TLSClientConfig:  &tls.Config{NextProtos: []string{"http/1.1"}},
-		HandshakeTimeout: 10 * time.Second,
-	}
-
-	var headers http.Header
+	opts := &websocket.DialOptions{}
 	if c.cookie != "" {
-		headers = http.Header{}
-		headers.Set("Cookie", c.cookieName+"="+c.cookie)
+		opts.HTTPHeader = http.Header{}
+		opts.HTTPHeader.Set("Cookie", c.cookieName+"="+c.cookie)
 	}
 
-	conn, _, err := dialer.Dial(c.url, headers)
+	// Bound the handshake with a context timeout (replaces gorilla's
+	// HandshakeTimeout). The dial context is independent of the connection's
+	// lifetime — coder/websocket does not retain it after the handshake.
+	dialCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	conn, _, err := websocket.Dial(dialCtx, c.url, opts)
 	if err != nil {
 		return fmt.Errorf("ws dial %s: %w", c.url, err)
 	}
-
-	// Keepalive: bound how long a silent connection may stay open, and extend
-	// the deadline every time the peer answers a ping.
-	_ = conn.SetReadDeadline(time.Now().Add(pongWait))
-	conn.SetPongHandler(func(string) error {
-		return conn.SetReadDeadline(time.Now().Add(pongWait))
-	})
+	conn.SetReadLimit(maxMessageBytes)
 
 	c.conn = conn
 	c.connected = true
@@ -120,7 +118,8 @@ func (c *WSClient) Connect() error {
 }
 
 // pingLoop sends a periodic ping so idle connections are not dropped by the
-// peer or an intermediary, and so a dead peer trips the read deadline.
+// peer or an intermediary, and so a dead peer (no pong within pongWait) trips a
+// teardown.
 func (c *WSClient) pingLoop() {
 	ticker := time.NewTicker(pingPeriod)
 	defer ticker.Stop()
@@ -135,9 +134,13 @@ func (c *WSClient) pingLoop() {
 			if conn == nil {
 				return
 			}
-			// WriteControl is safe to call concurrently with other writes.
-			if err := conn.WriteControl(websocket.PingMessage, nil,
-				time.Now().Add(10*time.Second)); err != nil {
+			ctx, cancel := context.WithTimeout(context.Background(), pongWait)
+			err := conn.Ping(ctx)
+			cancel()
+			if err != nil {
+				// Dead peer — close so the read loop unblocks and the caller can
+				// observe the disconnect.
+				c.Close()
 				return
 			}
 		}
@@ -173,14 +176,21 @@ func (c *WSClient) Unsubscribe(channels ...string) error {
 	return nil
 }
 
-// WriteJSON sends a JSON-encoded message.
+// WriteJSON sends a JSON-encoded text message.
 func (c *WSClient) WriteJSON(v interface{}) error {
 	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.conn == nil {
+	conn := c.conn
+	c.mu.Unlock()
+	if conn == nil {
 		return fmt.Errorf("not connected")
 	}
-	return c.conn.WriteJSON(v)
+	data, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	return conn.Write(ctx, websocket.MessageText, data)
 }
 
 // Messages returns a read-only channel of inbound raw messages.
@@ -196,9 +206,7 @@ func (c *WSClient) Close() {
 		defer c.mu.Unlock()
 		close(c.done)
 		if c.conn != nil {
-			_ = c.conn.WriteMessage(websocket.CloseMessage,
-				websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
-			_ = c.conn.Close()
+			_ = c.conn.Close(websocket.StatusNormalClosure, "")
 			c.connected = false
 		}
 	})
@@ -221,12 +229,14 @@ func (c *WSClient) readLoop() {
 			return
 		default:
 		}
-		_, msg, err := c.conn.ReadMessage()
+		// Each read is bounded by pongWait: any inbound frame proves the
+		// connection is live, and a silent peer trips the deadline.
+		ctx, cancel := context.WithTimeout(context.Background(), pongWait)
+		_, msg, err := c.conn.Read(ctx)
+		cancel()
 		if err != nil {
 			return
 		}
-		// Any inbound frame proves the connection is live — extend the deadline.
-		_ = c.conn.SetReadDeadline(time.Now().Add(pongWait))
 		select {
 		case c.messages <- msg:
 		default:

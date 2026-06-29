@@ -18,7 +18,11 @@
     "entry_point": "server/bifu-cli",
     "mcp_config": {
       "command": "${__dirname}/server/bifu-cli",
-      "args": ["--profile", "${user_config.profile}", "mcp", "serve"]
+      "args": ["--profile", "${user_config.profile}", "mcp", "serve"],
+      "env": {
+        "BIFU_MCP_ALLOW_TRADE": "${user_config.allow_trade}",
+        "BIFU_MCP_DETAILED": "${user_config.detailed}"
+      }
     }
   },
   "user_config": {
@@ -28,6 +32,20 @@
       "description": "Which bifu-cli profile to trade on: dev (test funds), staging, or prod (real money). Create and log in first: bifu-cli config init --profile <env> --env <env> && bifu-cli --profile <env> auth login",
       "default": "dev",
       "required": true
+    },
+    "allow_trade": {
+      "type": "boolean",
+      "title": "Allow trading (place/cancel orders)",
+      "description": "OFF = read-only (recommended). When ON, the agent can place and cancel REAL orders on the selected profile — only enable if you trust the prompts this agent processes.",
+      "default": false,
+      "required": false
+    },
+    "detailed": {
+      "type": "boolean",
+      "title": "Show precise balances",
+      "description": "OFF masks exact balances/positions before they enter the AI context. Turn ON to expose precise figures.",
+      "default": false,
+      "required": false
     }
   },
   "compatibility": {

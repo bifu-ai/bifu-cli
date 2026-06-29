@@ -3,6 +3,8 @@
 package clifconfig
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -73,10 +75,6 @@ type AuthProfile struct {
 	SpotAccountID     string `yaml:"spot_account_id"`
 	ContractAccountID string `yaml:"contract_account_id"`
 
-	// Token-based auth (gateway)
-	UToken string `yaml:"u_token"`
-	VToken string `yaml:"v_token"`
-
 	// Common headers
 	Locale       string `yaml:"locale"`        // e.g. "en", "zh-CN"
 	TerminalType string `yaml:"terminal_type"` // e.g. "API"
@@ -117,12 +115,43 @@ func defaultProfile(name string) *Profile {
 
 // ConfigDir returns the directory where the config file lives.
 // Override with BIFU_CLI_HOME env var.
+//
+// The override is validated (BIFU-CLI-202606-025): a symlinked target, or a
+// world/group-writable directory, is rejected so a poisoned env var can't point
+// the CLI at an attacker-controlled config (with a forged base_url / cookie).
+// On validation failure we fall back to the default ~/.bifu-cli with a warning.
 func ConfigDir() string {
 	if v := os.Getenv("BIFU_CLI_HOME"); v != "" {
-		return v
+		if err := validateConfigDir(v); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: ignoring BIFU_CLI_HOME=%q: %v\n", v, err)
+		} else {
+			return v
+		}
 	}
 	home, _ := os.UserHomeDir()
 	return filepath.Join(home, DefaultConfigDir)
+}
+
+// validateConfigDir rejects a BIFU_CLI_HOME that is a symlink or has loose
+// permissions. A non-existent dir is allowed (it will be created 0700 on Save).
+func validateConfigDir(dir string) error {
+	fi, err := os.Lstat(dir) // #nosec G703 -- this IS the BIFU_CLI_HOME validation gate; Lstat only inspects the path (no open/read) to reject symlinks/loose perms
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if fi.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf("path is a symlink")
+	}
+	if !fi.IsDir() {
+		return fmt.Errorf("path is not a directory")
+	}
+	if fi.Mode().Perm()&0o022 != 0 {
+		return fmt.Errorf("directory is group/world-writable (%#o)", fi.Mode().Perm())
+	}
+	return nil
 }
 
 // ConfigPath returns the full path to the config file.
@@ -152,21 +181,65 @@ func Load() (*CLIConfig, error) {
 	if cfg.ActiveProfile == "" {
 		cfg.ActiveProfile = "default"
 	}
+	// Transparently decrypt at-rest secrets so the rest of the code works with
+	// plaintext in memory (BIFU-CLI-202606-004). A field that can't be decrypted
+	// (e.g. config copied from another machine) is cleared so the user is asked
+	// to log in again rather than sending a garbage cookie.
+	for _, p := range cfg.Profiles {
+		if p == nil {
+			continue
+		}
+		if dec, err := decryptSecret(p.Auth.AuthCookie); err == nil {
+			p.Auth.AuthCookie = dec
+		} else {
+			fmt.Fprintf(os.Stderr, "warning: could not decrypt session for profile %q (run `bifu-cli auth login`): %v\n", p.Name, err)
+			p.Auth.AuthCookie = ""
+		}
+	}
 	return &cfg, nil
 }
 
 // Save writes the config back to disk, creating the directory if needed.
+// Secret fields (session cookie) are encrypted at rest (BIFU-CLI-202606-004);
+// the in-memory config keeps plaintext, so a shallow clone is encrypted just
+// for serialization.
 func (c *CLIConfig) Save() error {
 	dir := ConfigDir()
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return fmt.Errorf("create config dir: %w", err)
 	}
 
-	data, err := yaml.Marshal(c)
+	out, err := c.encryptedClone()
+	if err != nil {
+		return fmt.Errorf("encrypt secrets: %w", err)
+	}
+	data, err := yaml.Marshal(out)
 	if err != nil {
 		return fmt.Errorf("marshal config: %w", err)
 	}
 	return os.WriteFile(ConfigPath(), data, 0o600)
+}
+
+// encryptedClone returns a copy of the config with secret fields encrypted,
+// without mutating the live in-memory profiles.
+func (c *CLIConfig) encryptedClone() (*CLIConfig, error) {
+	clone := &CLIConfig{
+		ActiveProfile: c.ActiveProfile,
+		Profiles:      make(map[string]*Profile, len(c.Profiles)),
+	}
+	for name, p := range c.Profiles {
+		if p == nil {
+			continue
+		}
+		cp := *p
+		enc, err := encryptSecret(cp.Auth.AuthCookie)
+		if err != nil {
+			return nil, err
+		}
+		cp.Auth.AuthCookie = enc
+		clone.Profiles[name] = &cp
+	}
+	return clone, nil
 }
 
 // Active returns the currently active profile, creating a default if absent.
@@ -201,22 +274,35 @@ func (c *CLIConfig) EnsureProfile(name string) *Profile {
 // maxClientOrderIDLen bounds generated client order IDs (exchange limit).
 const maxClientOrderIDLen = 64
 
-// GenerateClientOrderID builds a deterministic-ish client order ID of the form
-// "<userID>-<symbol>-<side>-<UTCtimestamp>", truncated to the exchange's 64-char
+// GenerateClientOrderID builds a client order ID of the form
+// "<symbol>-<side>-<UTCtimestamp>-<rand>", truncated to the exchange's 64-char
 // limit. It is shared by the spot and contract order commands so the format and
-// length rule stay in one place. The timestamp is passed in (rather than read
-// from the clock) to keep the function pure and testable.
+// length rule stay in one place.
+//
+// The user_id is intentionally NOT embedded (BIFU-CLI-202606-009): it leaked the
+// account identifier to the exchange on every order. A crypto/rand suffix makes
+// the id unique even for two orders placed in the same second (the timestamp is
+// only 1s-precision), preventing server-side dedup from dropping a legitimate
+// order. ts is passed in (not read from the clock) to keep the timestamp
+// component testable.
 func (p *Profile) GenerateClientOrderID(symbol, side string, ts time.Time) string {
-	uid := p.Auth.UserID
-	if uid == "" {
-		uid = "anon"
-	}
 	id := fmt.Sprintf("%s-%s-%s-%s",
-		uid, strings.ToLower(symbol), strings.ToLower(side), ts.UTC().Format("20060102150405"))
+		strings.ToLower(symbol), strings.ToLower(side), ts.UTC().Format("20060102150405"), randomSuffix())
 	if len(id) > maxClientOrderIDLen {
 		id = id[:maxClientOrderIDLen]
 	}
 	return id
+}
+
+// randomSuffix returns 8 hex chars of crypto-random entropy for order-id
+// uniqueness. On the (practically impossible) RNG failure it falls back to the
+// nanosecond clock so an id is always produced.
+func randomSuffix() string {
+	b := make([]byte, 4)
+	if _, err := rand.Read(b); err != nil {
+		return fmt.Sprintf("%08x", time.Now().UnixNano()&0xffffffff)
+	}
+	return hex.EncodeToString(b)
 }
 
 // ── Derived helpers used by API clients ───────────────────────────────────────
@@ -252,23 +338,33 @@ func (p *Profile) GetWSMarketURL() string {
 }
 
 // GetWSPrivateURL builds the full WebSocket URL for private contract trading events.
-// If WSPrivate is already a full URL (starts with ws:// or wss://), it is returned as-is;
-// otherwise it is appended to WebSocketURL.
+// If WSPrivate is already a full URL it is returned (with ws:// upgraded to wss://);
+// otherwise it is appended to WebSocketURL. Private streams carry the session
+// cookie and trading events, so plaintext ws:// is force-upgraded to wss://
+// (BIFU-CLI-202606-007).
 func (p *Profile) GetWSPrivateURL() string {
 	if strings.HasPrefix(p.WSPrivate, "ws://") || strings.HasPrefix(p.WSPrivate, "wss://") {
-		return p.WSPrivate
+		return forceWSS(p.WSPrivate)
 	}
 	return p.WebSocketURL + p.WSPrivate
 }
 
 // GetWSPrivateSpotURL builds the full WebSocket URL for private spot trading events.
-// If WSPrivateSpot is already a full URL (starts with ws:// or wss://), it is returned as-is;
-// otherwise it is appended to WebSocketURL.
+// If WSPrivateSpot is already a full URL it is returned (with ws:// upgraded to
+// wss://); otherwise it is appended to WebSocketURL. See GetWSPrivateURL.
 func (p *Profile) GetWSPrivateSpotURL() string {
 	if strings.HasPrefix(p.WSPrivateSpot, "ws://") || strings.HasPrefix(p.WSPrivateSpot, "wss://") {
-		return p.WSPrivateSpot
+		return forceWSS(p.WSPrivateSpot)
 	}
 	return p.WebSocketURL + p.WSPrivateSpot
+}
+
+// forceWSS upgrades a plaintext ws:// private-stream URL to wss://.
+func forceWSS(u string) string {
+	if strings.HasPrefix(u, "ws://") {
+		return "wss://" + strings.TrimPrefix(u, "ws://")
+	}
+	return u
 }
 
 // GetPushgwWSURL returns the MT5 pushgw WebSocket URL.

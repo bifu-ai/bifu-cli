@@ -254,7 +254,7 @@ func parsePageDataOrders(raw []byte) ([]Order, error) {
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(raw, &wrapper); err != nil {
-		return nil, fmt.Errorf("parse page response: %w (body: %.200s)", err, raw)
+		return nil, fmt.Errorf("parse page response: %w", err)
 	}
 	if wrapper.Code != "SUCCESS" {
 		return nil, fmt.Errorf("API error: %s - %s", wrapper.Code, wrapper.Message)

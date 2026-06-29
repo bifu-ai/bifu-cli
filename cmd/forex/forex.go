@@ -4,6 +4,8 @@ package forex
 
 import (
 	"fmt"
+	"math"
+	"os"
 	"strconv"
 	"time"
 
@@ -73,6 +75,14 @@ func newAccountCreate(load LoadFn) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			// Prefer the env var over --password so the secret doesn't land in the
+			// process list / shell history (BIFU-CLI-202606-019).
+			if password == "" {
+				password = os.Getenv("BIFU_FOREX_PASSWORD")
+			}
+			if password == "" {
+				return fmt.Errorf("account password required: set BIFU_FOREX_PASSWORD or pass --password (avoid the command line where possible)")
+			}
 			mtType := int32(2)
 			switch platform {
 			case "tradfi", "fortex", "TradFi":
@@ -120,10 +130,32 @@ func newAccountCreate(load LoadFn) *cobra.Command {
 	cmd.Flags().StringVar(&subType, "sub-type", "normal", "Sub-type: normal | signal | copyTrade")
 	cmd.Flags().StringVar(&currency, "currency", "USD", "Account currency (e.g. USD)")
 	cmd.Flags().Int64Var(&leverage, "leverage", 100, "Leverage")
-	cmd.Flags().StringVar(&password, "password", "", "Account password (required)")
+	cmd.Flags().StringVar(&password, "password", "", "Account password (or set BIFU_FOREX_PASSWORD; avoid passing on the command line)")
 	cmd.Flags().BoolVar(&noWhitelist, "no-whitelist", false, "Do not auto-enroll into tradfi whitelist (tradfi only)")
-	_ = cmd.MarkFlagRequired("password")
 	return cmd
+}
+
+// maxForexAmount is a sanity ceiling guarding against fat-fingered/overflow
+// inputs on forex monetary fields.
+const maxForexAmount = 1e12
+
+// validateAmount rejects non-finite amounts and bounds the magnitude. When
+// allowZero is true, 0 is permitted (e.g. price=0 means market, SL/TP=0 means
+// none, close volume=0 means full close); otherwise the value must be > 0.
+func validateAmount(name string, v float64, allowZero bool) error {
+	if math.IsNaN(v) || math.IsInf(v, 0) {
+		return fmt.Errorf("--%s must be a finite number", name)
+	}
+	if v < 0 {
+		return fmt.Errorf("--%s must not be negative", name)
+	}
+	if !allowZero && v == 0 {
+		return fmt.Errorf("--%s must be greater than 0", name)
+	}
+	if v > maxForexAmount {
+		return fmt.Errorf("--%s exceeds the maximum allowed (%g)", name, maxForexAmount)
+	}
+	return nil
 }
 
 func newClient(load LoadFn) (*paymentapi.Client, *output.Printer, error) {
@@ -204,6 +236,21 @@ func newOrderCreate(load LoadFn) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			// Validate monetary inputs (BIFU-CLI-202606-014): reject non-finite,
+			// non-positive volume, and negative price/SL/TP before they reach the
+			// backend, so a fat-fingered 0/negative size can't produce a degenerate
+			// order.
+			if err := validateAmount("volume", volume, false); err != nil {
+				return err
+			}
+			for _, f := range []struct {
+				name string
+				val  float64
+			}{{"price", price}, {"sl", sl}, {"tp", tp}} {
+				if err := validateAmount(f.name, f.val, true); err != nil {
+					return err
+				}
+			}
 			req := &paymentapi.CreateForexOrderReq{
 				LoginID: loginID,
 				Symbol:  symbol,
@@ -278,12 +325,21 @@ func newOrderModify(load LoadFn) *cobra.Command {
 				OrderID: orderID,
 			}
 			if cmd.Flags().Changed("sl") {
+				if err := validateAmount("sl", sl, true); err != nil {
+					return err
+				}
 				req.SL = sl
 			}
 			if cmd.Flags().Changed("tp") {
+				if err := validateAmount("tp", tp, true); err != nil {
+					return err
+				}
 				req.TP = tp
 			}
 			if cmd.Flags().Changed("price") {
+				if err := validateAmount("price", price, true); err != nil {
+					return err
+				}
 				req.Price = price
 			}
 			if err := c.ModifyForexOrder(req); err != nil {
@@ -315,6 +371,9 @@ func newOrderClose(load LoadFn) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			c, pr, err := newClient(load)
 			if err != nil {
+				return err
+			}
+			if err := validateAmount("volume", volume, true); err != nil {
 				return err
 			}
 			if err := c.CloseForexOrder(&paymentapi.CloseForexOrderReq{
@@ -428,6 +487,9 @@ func newBatchClose(load LoadFn) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			c, pr, err := newClient(load)
 			if err != nil {
+				return err
+			}
+			if err := validateAmount("volume", volume, true); err != nil {
 				return err
 			}
 			results, err := c.BatchCloseForexOrder(&paymentapi.BatchCloseForexOrderReq{

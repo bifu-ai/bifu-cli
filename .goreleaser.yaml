@@ -34,6 +34,29 @@ archives:
 checksum:
   name_template: "checksums.txt"
 
+# Sign the checksums file with cosign (keyless / Sigstore + OIDC) so users can
+# verify artifact provenance — the binaries were previously unsigned
+# (BIFU-CLI-202606-015). The CI job installs cosign and runs with
+# id-token: write to obtain the OIDC token.
+#
+# Verify a download with:
+#   cosign verify-blob --certificate checksums.txt.pem \
+#     --signature checksums.txt.sig \
+#     --certificate-identity-regexp 'https://github.com/decodeex/bifu-cli' \
+#     --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
+#     checksums.txt
+signs:
+  - cmd: cosign
+    artifacts: checksum
+    output: true
+    certificate: "${artifact}.pem"
+    args:
+      - sign-blob
+      - "--output-certificate=${certificate}"
+      - "--output-signature=${signature}"
+      - "${artifact}"
+      - "--yes"
+
 snapshot:
   version_template: "{{ incpatch .Version }}-next"
 
@@ -63,13 +86,12 @@ homebrew_casks:
     directory: Casks
     homepage: "https://cli.bifu.dev"
     description: "BifuFX trading platform CLI — spot, contract, forex, WebSocket, MCP"
-    # Unsigned binary: strip the quarantine bit so macOS Gatekeeper won't block it.
-    hooks:
-      post:
-        install: |
-          if OS.mac?
-            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/bifu-cli"]
-          end
+    # NOTE: previously a post-install hook ran `xattr -dr com.apple.quarantine`,
+    # silently bypassing macOS Gatekeeper for an unsigned binary
+    # (BIFU-CLI-202606-015). That blanket strip has been removed. Until the
+    # binary is Apple-notarized, macOS users may need to allow it once via
+    # System Settings → Privacy & Security (see the release notes). Artifact
+    # integrity is verifiable via the cosign-signed checksums.txt above.
 
 release:
   # Source repo (decodeex/bifu-cli) is private, so publish the downloadable
@@ -85,3 +107,13 @@ release:
     Install: `curl -fsSL https://cli.bifu.dev/install.sh | bash`
     Homebrew: `brew install decodeex/tap/bifu-cli`
     npm: `npm i -g @decodeex/bifu-cli`
+
+    **Verify (cosign):**
+    ```
+    cosign verify-blob --certificate checksums.txt.pem --signature checksums.txt.sig \
+      --certificate-identity-regexp 'https://github.com/decodeex/bifu-cli' \
+      --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' checksums.txt
+    ```
+
+    **macOS:** binaries are not yet Apple-notarized. If Gatekeeper blocks the
+    first launch, allow it once via System Settings → Privacy & Security.

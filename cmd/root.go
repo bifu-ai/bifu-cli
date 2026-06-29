@@ -86,19 +86,43 @@ func init() {
 	})
 
 	load := loadCtx
+	// Trading commands require an authenticated session. Gate them at load time
+	// so an un-logged-in invocation fails fast client-side with a clear message
+	// instead of firing a doomed request and surfacing a raw 401
+	// (BIFU-CLI-202606-013).
+	tradeLoad := requireAuth(load)
 
 	rootCmd.AddCommand(config.NewConfigCmd())
 	rootCmd.AddCommand(auth.NewAuthCmd(load))
-	rootCmd.AddCommand(spot.NewSpotCmd(load))
-	rootCmd.AddCommand(contract.NewContractCmd(load))
-	rootCmd.AddCommand(payment.NewPaymentCmd(load))
-	rootCmd.AddCommand(forex.NewForexCmd(load))
+	rootCmd.AddCommand(spot.NewSpotCmd(tradeLoad))
+	rootCmd.AddCommand(contract.NewContractCmd(tradeLoad))
+	rootCmd.AddCommand(payment.NewPaymentCmd(tradeLoad))
+	rootCmd.AddCommand(forex.NewForexCmd(tradeLoad))
 	rootCmd.AddCommand(ws.NewWSCmd(load))
-	rootCmd.AddCommand(orion.NewOrionCmd(load))
+	// orion endpoints are cookie-authenticated (signal subscriptions can incur
+	// charges), so they get the same pre-login gate as the other trading
+	// commands (BIFU-CLI-202606-013). ws stays on the plain loader — `ws market`
+	// is a public stream.
+	rootCmd.AddCommand(orion.NewOrionCmd(tradeLoad))
 	rootCmd.AddCommand(mcp.NewMCPCmd(load))
 	rootCmd.AddCommand(skillscmd.NewSkillsCmd())
 	rootCmd.AddCommand(newVersionCmd())
 	rootCmd.AddCommand(newUpgradeCmd())
+}
+
+// requireAuth wraps a LoadFn so commands that need a session fail fast when the
+// active profile has no stored cookie (BIFU-CLI-202606-013).
+func requireAuth(load LoadFn) LoadFn {
+	return func() (*clifconfig.Profile, *output.Printer, error) {
+		p, pr, err := load()
+		if err != nil {
+			return p, pr, err
+		}
+		if p.Auth.AuthCookie == "" {
+			return p, pr, fmt.Errorf("not logged in — run `bifu-cli auth login` (or set the profile cookie with `bifu-cli config set`)")
+		}
+		return p, pr, nil
+	}
 }
 
 func loadCtx() (*clifconfig.Profile, *output.Printer, error) {

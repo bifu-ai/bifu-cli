@@ -6,6 +6,21 @@ dist/
 *.env
 .env
 
+# Keys / certificates / credentials (never commit these to a financial CLI repo)
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cer
+*.der
+*.jks
+*.keystore
+id_rsa
+id_ed25519
+config.yaml
+cosign.key
+
 # OS / editor
 .DS_Store
 *.swp

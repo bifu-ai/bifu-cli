@@ -79,13 +79,22 @@ is trusted.`,
 func newSetupCmd() *cobra.Command {
 	var clientName string
 	var profiles string
+	var allowTrade bool
+	var detailed bool
 	cmd := &cobra.Command{
 		Use:   "setup",
 		Short: "Register the bifu MCP server with an MCP client",
-		Example: `  bifu-cli --profile dev mcp setup --client claude          # Claude Code, single env
-  bifu-cli mcp setup --client claude-desktop --profiles dev,staging,prod  # 3 servers bifu-dev/staging/prod
-  bifu-cli --profile dev mcp setup --client codex           # OpenAI Codex (codex mcp add)
-  bifu-cli mcp setup --client cursor`,
+		Long: `Register the bifu MCP server with an MCP client.
+
+By default the registered server is READ-ONLY: order placement/cancellation is
+disabled, so a prompt-injected agent can't move funds. Pass --allow-trade to
+write BIFU_MCP_ALLOW_TRADE=1 into the client config and enable the write tools
+for this registration. --detailed writes BIFU_MCP_DETAILED=1 so read tools
+return precise balances instead of masked ones.`,
+		Example: `  bifu-cli --profile dev mcp setup --client claude               # read-only (safe default)
+  bifu-cli --profile dev mcp setup --client claude --allow-trade  # enable order place/cancel
+  bifu-cli mcp setup --client claude-desktop --profiles dev,staging,prod
+  bifu-cli --profile dev mcp setup --client codex`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			pr := output.NewPrinter(output.FormatTable, false)
 
@@ -95,14 +104,21 @@ func newSetupCmd() *cobra.Command {
 			}
 			rootProfile, _ := cmd.Root().PersistentFlags().GetString("profile")
 			servers := resolveServers(profiles, rootProfile)
+			env := mcpEnv(allowTrade, detailed)
+
+			if allowTrade {
+				pr.Line("⚠ --allow-trade: the registered server CAN place/cancel real orders.")
+			} else {
+				pr.Line("Registered read-only (no trading). Re-run with --allow-trade to enable orders.")
+			}
 
 			// CLI-managed clients own their own config — register via their
 			// official `... mcp add` command (each falls back to a snippet).
 			switch clientName {
 			case "claude", "claude-code":
-				return setupClaudeCode(pr, exe, servers) // Claude Code (~/.claude.json)
+				return setupClaudeCode(pr, exe, servers, env) // Claude Code (~/.claude.json)
 			case "codex":
-				return setupCodex(pr, exe, servers) // OpenAI Codex (~/.codex/config.toml)
+				return setupCodex(pr, exe, servers, env) // OpenAI Codex (~/.codex/config.toml)
 			}
 
 			path, key, err := clientConfigPath(clientName)
@@ -110,7 +126,7 @@ func newSetupCmd() *cobra.Command {
 				// Unknown client: print the snippet for manual setup.
 				m := map[string]any{}
 				for _, s := range servers {
-					m[s.name] = map[string]any{"command": exe, "args": serveArgs(s.profile)}
+					m[s.name] = mcpEntry(exe, s.profile, env)
 				}
 				snippet, _ := json.MarshalIndent(map[string]any{"mcpServers": m}, "", "  ")
 				pr.Line("Add this to your MCP client config:\n%s", string(snippet))
@@ -118,8 +134,7 @@ func newSetupCmd() *cobra.Command {
 			}
 
 			for _, s := range servers {
-				entry := map[string]any{"command": exe, "args": serveArgs(s.profile)}
-				if err := mergeMCPConfig(path, key, s.name, entry); err != nil {
+				if err := mergeMCPConfig(path, key, s.name, mcpEntry(exe, s.profile, env)); err != nil {
 					return fmt.Errorf("update %s: %w", path, err)
 				}
 			}
@@ -130,10 +145,58 @@ func newSetupCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&clientName, "client", "", "MCP client: claude (Claude Code) | codex | cursor | vscode | claude-desktop (omit to print a snippet)")
 	cmd.Flags().StringVar(&profiles, "profiles", "", "Comma-separated env profiles → one server each as bifu-<env> (e.g. dev,staging,prod). Default: a single 'bifu' using --profile/active.")
+	cmd.Flags().BoolVar(&allowTrade, "allow-trade", false, "Enable order place/cancel for the registered server (sets BIFU_MCP_ALLOW_TRADE=1). Off by default for safety.")
+	cmd.Flags().BoolVar(&detailed, "detailed", false, "Return precise balances from read tools (sets BIFU_MCP_DETAILED=1). Masked by default.")
 	_ = cmd.RegisterFlagCompletionFunc("client", func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
 		return []string{"claude", "codex", "cursor", "vscode", "claude-desktop"}, cobra.ShellCompDirectiveNoFileComp
 	})
 	return cmd
+}
+
+// mcpEnv builds the env map written into a client's MCP server entry. Trading
+// and detailed-balance access are opt-in (BIFU-CLI-202606-001 / 024).
+func mcpEnv(allowTrade, detailed bool) map[string]string {
+	env := map[string]string{}
+	if allowTrade {
+		env["BIFU_MCP_ALLOW_TRADE"] = "1"
+	}
+	if detailed {
+		env["BIFU_MCP_DETAILED"] = "1"
+	}
+	return env
+}
+
+// mcpEntry builds the JSON config entry (command/args[/env]) for one server.
+func mcpEntry(exe, profile string, env map[string]string) map[string]any {
+	entry := map[string]any{"command": exe, "args": serveArgs(profile)}
+	if len(env) > 0 {
+		e := map[string]any{}
+		for k, v := range env {
+			e[k] = v
+		}
+		entry["env"] = e
+	}
+	return entry
+}
+
+// envAddFlags renders the env map as repeated `--env KEY=VALUE` CLI args (the
+// form used by `claude mcp add` / `codex mcp add`).
+func envAddFlags(env map[string]string) []string {
+	var out []string
+	for k, v := range env {
+		out = append(out, "--env", k+"="+v)
+	}
+	return out
+}
+
+// envAddJoin renders the env map as a printable `--env K=V ` prefix for a
+// copy-paste command (trailing space when non-empty so it slots before `--`).
+func envAddJoin(env map[string]string) string {
+	flags := envAddFlags(env)
+	if len(flags) == 0 {
+		return ""
+	}
+	return strings.Join(flags, " ") + " "
 }
 
 // serverSpec is one MCP server entry to register: a client-visible name and the
@@ -175,13 +238,13 @@ func serveArgs(profile string) []string {
 // ~/.claude.json. NOTE: this is the Claude Code agent, not the Claude Desktop
 // app (that's --client claude-desktop). Falls back to a copy-paste command and
 // a project .mcp.json snippet when the claude CLI isn't on PATH.
-func setupClaudeCode(pr *output.Printer, exe string, servers []serverSpec) error {
+func setupClaudeCode(pr *output.Printer, exe string, servers []serverSpec, env map[string]string) error {
 	claudePath, err := exec.LookPath("claude")
 	if err != nil {
 		m := map[string]any{}
 		for _, s := range servers {
-			pr.Line("Claude Code CLI not found. Once installed, run:\n  claude mcp add %s -- %s %s", s.name, exe, strings.Join(serveArgs(s.profile), " "))
-			m[s.name] = map[string]any{"command": exe, "args": serveArgs(s.profile)}
+			pr.Line("Claude Code CLI not found. Once installed, run:\n  claude mcp add %s %s-- %s %s", s.name, envAddJoin(env), exe, strings.Join(serveArgs(s.profile), " "))
+			m[s.name] = mcpEntry(exe, s.profile, env)
 		}
 		snippet, _ := json.MarshalIndent(map[string]any{"mcpServers": m}, "", "  ")
 		pr.Line("Or add to a project .mcp.json:\n%s", string(snippet))
@@ -192,7 +255,8 @@ func setupClaudeCode(pr *output.Printer, exe string, servers []serverSpec) error
 	// mcp add` errors if the name already exists.
 	for _, s := range servers {
 		_ = exec.Command(claudePath, "mcp", "remove", s.name).Run() // #nosec G204 -- fixed args; s.name is bifu[-env]
-		addArgs := append([]string{"mcp", "add", s.name, "--", exe}, serveArgs(s.profile)...)
+		addArgs := append([]string{"mcp", "add", s.name}, envAddFlags(env)...)
+		addArgs = append(append(addArgs, "--", exe), serveArgs(s.profile)...)
 		out, err := exec.Command(claudePath, addArgs...).CombinedOutput() // #nosec G204 -- exe is this binary's own path; args fixed
 		if err != nil {
 			return fmt.Errorf("claude mcp add %s failed: %w\n%s", s.name, err, strings.TrimSpace(string(out)))
@@ -206,12 +270,13 @@ func setupClaudeCode(pr *output.Printer, exe string, servers []serverSpec) error
 // setupCodex registers the bifu MCP server with the OpenAI Codex CLI. It prefers
 // the official `codex mcp add` (idempotent, owns ~/.codex/config.toml); if the
 // codex binary is absent it prints the TOML snippet to add manually.
-func setupCodex(pr *output.Printer, exe string, servers []serverSpec) error {
+func setupCodex(pr *output.Printer, exe string, servers []serverSpec, env map[string]string) error {
 	if codexPath := lookCodex(); codexPath != "" {
 		// Re-register so a changed --profile takes effect (add errors if it exists).
 		for _, s := range servers {
 			_ = exec.Command(codexPath, "mcp", "remove", s.name).Run() // #nosec G204 -- fixed args; s.name is bifu[-env]
-			addArgs := append([]string{"mcp", "add", s.name, "--", exe}, serveArgs(s.profile)...)
+			addArgs := append([]string{"mcp", "add", s.name}, envAddFlags(env)...)
+			addArgs = append(append(addArgs, "--", exe), serveArgs(s.profile)...)
 			out, err := exec.Command(codexPath, addArgs...).CombinedOutput() // #nosec G204 -- exe is this binary's own path; args fixed
 			if err != nil {
 				return fmt.Errorf("codex mcp add %s failed: %w\n%s", s.name, err, strings.TrimSpace(string(out)))
@@ -230,7 +295,15 @@ func setupCodex(pr *output.Printer, exe string, servers []serverSpec) error {
 		for i, a := range args {
 			quoted[i] = fmt.Sprintf("%q", a)
 		}
-		fmt.Fprintf(&b, "[mcp_servers.%s]\ncommand = %q\nargs = [%s]\n\n", s.name, exe, strings.Join(quoted, ", "))
+		fmt.Fprintf(&b, "[mcp_servers.%s]\ncommand = %q\nargs = [%s]\n", s.name, exe, strings.Join(quoted, ", "))
+		if len(env) > 0 {
+			var kvs []string
+			for k, v := range env {
+				kvs = append(kvs, fmt.Sprintf("%s = %q", k, v))
+			}
+			fmt.Fprintf(&b, "env = { %s }\n", strings.Join(kvs, ", "))
+		}
+		b.WriteString("\n")
 	}
 	pr.Line("Codex CLI not found on PATH. Add this to ~/.codex/config.toml:\n\n%s", b.String())
 	return nil
