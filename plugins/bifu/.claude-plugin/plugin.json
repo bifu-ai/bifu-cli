@@ -1,6 +1,6 @@
 {
   "name": "bifu",
-  "version": "1.1.12",
+  "version": "1.1.13",
   "description": "BifuFX trading platform — spot, contract, forex (MT5/TradFi), payments, WebSocket and orion signals, exposed as agent skills and MCP tools.",
   "author": {
     "name": "BifuFX",
