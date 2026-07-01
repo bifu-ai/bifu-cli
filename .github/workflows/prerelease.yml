@@ -35,12 +35,15 @@ jobs:
     # Canonical repo only — the public mirror has no develop branch / release repo.
     if: ${{ github.repository == 'decodeex/bifu-cli' }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # cosign keyless signing
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
         with:
           fetch-depth: 0 # need tags to compute the next version
 
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
           go-version-file: go.mod
           cache: true
@@ -59,14 +62,17 @@ jobs:
       - name: Tag locally for GoReleaser
         run: git tag "${{ steps.ver.outputs.tag }}"
 
+      - uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3
+
       - name: Run GoReleaser (prerelease)
-        uses: goreleaser/goreleaser-action@v7
+        uses: goreleaser/goreleaser-action@5daf1e915a5f0af01ddbcd89a43b8061ff4f1a89 # v7
         with:
-          version: latest
+          version: "v2.16.0" # pinned, not "latest"
           args: release --clean
         env:
           # Publishes the GitHub pre-release to the public decodeex/bifu-cli-releases
           # repo (release.prerelease=auto marks rc tags as pre-release). The cask
           # upload is skipped for prereleases (skip_upload: auto in .goreleaser.yaml).
-          GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+          # Uses the releases-repo-scoped token (not the broad shared PAT).
+          GITHUB_TOKEN: ${{ secrets.RELEASES_REPO_TOKEN || secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
           HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}

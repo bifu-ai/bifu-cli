@@ -8,6 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"bifu-cli/internal/client"
 	"bifu-cli/internal/clifconfig"
 )
 
@@ -67,7 +68,7 @@ func doLogout(profile *clifconfig.Profile) error {
 	setLoginHeaders(req, termType)
 	req.Header.Set("Cookie", profile.Auth.AuthCookieName+"="+profile.Auth.AuthCookie)
 
-	resp, err := (&http.Client{Timeout: 30 * time.Second}).Do(req)
+	resp, err := client.NewSecureHTTPClient(30 * time.Second).Do(req)
 	if err != nil {
 		return err
 	}

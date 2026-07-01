@@ -4,6 +4,7 @@ package config
 
 import (
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -112,9 +113,10 @@ func newSetCmd() *cobra.Command {
 		userID            string
 		spotAccountID     string
 		contractAccountID string
-		uToken            string
 		locale            string
 		terminalType      string
+
+		insecure bool
 
 		// Forex
 		forexHTTP string
@@ -143,6 +145,34 @@ func newSetCmd() *cobra.Command {
 			}
 			p := cfg.EnsureProfile(name)
 
+			// Reject plaintext/foreign-scheme endpoints unless --insecure is set.
+			// http:// would transmit the login password and session cookie in the
+			// clear; a non-wss private stream leaks trading events
+			// (BIFU-CLI-202606-003 / 007). Only full URLs are checked; path-only
+			// values (e.g. "/api/v1/public/ws") are left to the base URL.
+			if cmd.Flags().Changed("base-url") {
+				if err := requireScheme("base-url", baseURL, "https://", insecure); err != nil {
+					return err
+				}
+			}
+			if cmd.Flags().Changed("web-url") {
+				if err := requireScheme("web-url", webURL, "https://", insecure); err != nil {
+					return err
+				}
+			}
+			for _, f := range []struct {
+				name, val string
+			}{
+				{"ws-url", wsURL}, {"ws-market", wsMarket},
+				{"ws-private", wsPrivate}, {"ws-private-spot", wsPrivateSpot},
+			} {
+				if cmd.Flags().Changed(f.name) {
+					if err := requireScheme(f.name, f.val, "wss://", insecure); err != nil {
+						return err
+					}
+				}
+			}
+
 			// Apply only the flags that were explicitly set
 			setIfChanged(cmd, "base-url", func() { p.BaseURL = baseURL })
 			setIfChanged(cmd, "web-url", func() { p.WebURL = webURL })
@@ -159,11 +189,16 @@ func newSetCmd() *cobra.Command {
 					p.HTTPTimeout = d
 				}
 			})
+			// Allow the session cookie to come from an env var instead of the
+			// command line, where it would leak into ps/shell history
+			// (BIFU-CLI-202606-019).
+			if envCookie := os.Getenv("BIFU_AUTH_COOKIE"); envCookie != "" && !cmd.Flags().Changed("auth-cookie") {
+				p.Auth.AuthCookie = envCookie
+			}
 			setIfChanged(cmd, "auth-cookie", func() { p.Auth.AuthCookie = authCookie })
 			setIfChanged(cmd, "user-id", func() { p.Auth.UserID = userID })
 			setIfChanged(cmd, "spot-account-id", func() { p.Auth.SpotAccountID = spotAccountID })
 			setIfChanged(cmd, "contract-account-id", func() { p.Auth.ContractAccountID = contractAccountID })
-			setIfChanged(cmd, "u-token", func() { p.Auth.UToken = uToken })
 			setIfChanged(cmd, "locale", func() { p.Auth.Locale = locale })
 			setIfChanged(cmd, "terminal-type", func() { p.Auth.TerminalType = terminalType })
 			setIfChanged(cmd, "forex-http", func() { p.Forex.HTTPEndpoint = forexHTTP })
@@ -194,11 +229,10 @@ func newSetCmd() *cobra.Command {
 	cmd.Flags().StringVar(&wsPrivateSpot, "ws-private-spot", "", "Spot private WebSocket full URL or path")
 	cmd.Flags().StringVar(&httpTimeout, "http-timeout", "", "HTTP timeout (e.g. 30s)")
 	// Auth flags
-	cmd.Flags().StringVar(&authCookie, "auth-cookie", "", "user_auth_name cookie (from browser DevTools)")
+	cmd.Flags().StringVar(&authCookie, "auth-cookie", "", "Session cookie value (or set BIFU_AUTH_COOKIE; avoid passing on the command line)")
 	cmd.Flags().StringVar(&userID, "user-id", "", "User ID")
 	cmd.Flags().StringVar(&spotAccountID, "spot-account-id", "", "Spot account ID")
 	cmd.Flags().StringVar(&contractAccountID, "contract-account-id", "", "Contract account ID")
-	cmd.Flags().StringVar(&uToken, "u-token", "", "u-token (gateway auth)")
 	cmd.Flags().StringVar(&locale, "locale", "", "Locale header (e.g. en, zh-CN)")
 	cmd.Flags().StringVar(&terminalType, "terminal-type", "", "Terminal type header (e.g. API, WEB)")
 	// Forex flags
@@ -207,7 +241,26 @@ func newSetCmd() *cobra.Command {
 	// Pushgw flags
 	cmd.Flags().StringVar(&pushgwWS, "pushgw-ws", "", "Pushgw WebSocket endpoint")
 	cmd.Flags().StringVar(&pushgwWSPath, "pushgw-ws-path", "", "Pushgw WebSocket path (e.g. /pushgw/ws)")
+	cmd.Flags().BoolVar(&insecure, "insecure", false, "Allow http:// / ws:// endpoints (transmits credentials in cleartext — dev/local only)")
 	return cmd
+}
+
+// requireScheme enforces a secure URL scheme for an endpoint flag. Path-only
+// values (no "://") pass through — they are resolved against the base URL. A
+// full URL with the wrong scheme is rejected unless --insecure was given, in
+// which case a loud warning is printed.
+func requireScheme(flag, value, want string, insecure bool) error {
+	if value == "" || !strings.Contains(value, "://") {
+		return nil
+	}
+	if strings.HasPrefix(value, want) {
+		return nil
+	}
+	if insecure {
+		fmt.Fprintf(os.Stderr, "⚠ --%s uses an insecure scheme (%s); credentials may be sent in cleartext\n", flag, value)
+		return nil
+	}
+	return fmt.Errorf("--%s must use %s (got %q); pass --insecure to override for dev/local", flag, want, value)
 }
 
 // ── config init ───────────────────────────────────────────────────────────────

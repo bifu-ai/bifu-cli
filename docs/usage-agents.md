@@ -214,8 +214,9 @@ bifu-cli --profile prod auth login --device
 ```bash
 # 交互式
 bifu-cli --profile dev auth login
-# 非交互(CI),dev 验证码固定 123456
-echo 123456 | bifu-cli --profile dev auth login --username you@example.com --password 'pw'
+# 非交互(CI),dev 验证码固定 123456。密码走环境变量,避免进入进程列表/shell 历史
+export BIFU_PASSWORD='pw'
+echo 123456 | bifu-cli --profile dev auth login --username you@example.com
 ```
 
 > 任何命令返回 **401** = 会话过期 → 重新 `auth login`。
@@ -342,8 +343,9 @@ bifu-cli forex positions   --login-id 800000177                                 
 bifu-cli forex order close --login-id 800000177 --order-id <ticket>                          # 平仓
 #   TradFi 实时报价见 §4.6 的 `ws pushgw --tradfi --market-watch`(可发现可交易符号)
 
-# ── 开户(--password 必填;--platform mt5|tradfi,--type live|demo,--leverage,--currency) ──
-bifu-cli forex account create --platform tradfi --currency USD --leverage 100 --password 'Pass123!'
+# ── 开户(密码走 BIFU_FOREX_PASSWORD 环境变量;--platform mt5|tradfi,--type live|demo,--leverage,--currency) ──
+export BIFU_FOREX_PASSWORD='Pass123!'
+bifu-cli forex account create --platform tradfi --currency USD --leverage 100
 bifu-cli payment forex-accounts          # 列出账户 + login id + 平台
 ```
 
@@ -388,7 +390,7 @@ bifu-cli ws config show                                  # 查看各 WS 端点 U
 | 机器可读输出 | `--json`(= `-o json`),便于解析 |
 | 跳过危险操作确认 | `-y` / `--yes`(撤销全部挂单等) |
 | 指定环境/账户 | `-p/--profile dev\|staging\|prod` |
-| 调试请求 | `-v`(Cookie/Authorization 自动脱敏) |
+| 调试请求 | `-v`(请求/响应 body 中 password/token/secret/cookie 字段自动掩码;会话 cookie 走 header,不写入日志) |
 
 - 下单类是**真实交易**;`order cancel --all`、大额操作请确认后再加 `-y`。
 - `--symbol`/`--contract` 可填**符号名**(`BTCUSDT` 等)或**数值 id**;符号名经
@@ -399,5 +401,5 @@ bifu-cli ws config show                                  # 查看各 WS 端点 U
 
 ## 6. 安全
 
-- 会话 cookie 存于 `~/.bifu-cli/config.yaml`(0600),**不会回显到终端**,`-v` 日志自动脱敏。
+- 会话 cookie 存于 `~/.bifu-cli/config.yaml`(0600),**以 AES-GCM 加密存储**(密钥绑定当前机器/用户),**不会回显到终端**;`-v` 日志对 body 内 password/token/secret/cookie 字段自动掩码。
 - 无任何本地生成 cookie 的命令;会话只来自后端(`auth login` / `auth register` 激活);`auth logout` 清除。

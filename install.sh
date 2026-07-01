@@ -45,6 +45,28 @@ trap 'rm -rf "$tmp"' EXIT
 
 info "Downloading $BINARY $version ($os/$arch)..."
 curl -fsSL "$url" -o "$tmp/$asset" || err "download failed: $url"
+
+# ── Verify checksum ──────────────────────────────────────────────────────────
+# GoReleaser publishes checksums.txt alongside the binaries. Verify the
+# downloaded archive against it so a tampered/corrupted download is rejected
+# rather than installed (BIFU-CLI-202606-008).
+sums_url="https://github.com/$REPO/releases/download/$version/checksums.txt"
+if curl -fsSL "$sums_url" -o "$tmp/checksums.txt"; then
+  expected=$(grep " $asset\$" "$tmp/checksums.txt" | awk '{print $1}' | head -1)
+  [ -n "$expected" ] || err "no checksum entry for $asset in checksums.txt"
+  if command -v sha256sum >/dev/null 2>&1; then
+    actual=$(sha256sum "$tmp/$asset" | awk '{print $1}')
+  elif command -v shasum >/dev/null 2>&1; then
+    actual=$(shasum -a 256 "$tmp/$asset" | awk '{print $1}')
+  else
+    err "no sha256 tool (sha256sum/shasum) available to verify the download"
+  fi
+  [ "$expected" = "$actual" ] || err "checksum mismatch for $asset (expected $expected, got $actual)"
+  info "✓ checksum verified"
+else
+  err "could not download checksums.txt for verification ($sums_url)"
+fi
+
 tar -xzf "$tmp/$asset" -C "$tmp" || err "extract failed"
 [ -f "$tmp/$BINARY" ] || err "binary not found in archive"
 chmod +x "$tmp/$BINARY"

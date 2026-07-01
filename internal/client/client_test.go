@@ -243,3 +243,68 @@ func TestHTTPParamsAppendedToQuery(t *testing.T) {
 		t.Errorf("query symbol = %q, want %q", gotQuery, "BTCUSDT")
 	}
 }
+
+// TestRedirectStripsCookie verifies the session cookie is NOT forwarded across a
+// redirect to a different host (BIFU-CLI-202606-002).
+func TestRedirectStripsCookie(t *testing.T) {
+	var gotCookieOnTarget string
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotCookieOnTarget = r.Header.Get("Cookie")
+		w.WriteHeader(200)
+		_, _ = w.Write([]byte(`{"code":"SUCCESS"}`))
+	}))
+	defer target.Close()
+
+	origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, target.URL+"/next", http.StatusFound)
+	}))
+	defer origin.Close()
+
+	prof := &clifconfig.Profile{
+		BaseURL: origin.URL,
+		Auth:    clifconfig.AuthProfile{AuthCookie: "SECRET", AuthCookieName: "session"},
+	}
+	c := NewHTTPClient(prof)
+	if _, err := c.GetSpot(origin.URL+"/start", nil); err != nil {
+		t.Fatalf("request: %v", err)
+	}
+	if strings.Contains(gotCookieOnTarget, "SECRET") {
+		t.Fatalf("session cookie leaked across cross-host redirect: %q", gotCookieOnTarget)
+	}
+}
+
+// TestCookieBoundToHost verifies the cookie is only attached to the configured
+// host (BIFU-CLI-202606-003).
+func TestCookieBoundToHost(t *testing.T) {
+	var sawCookie string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		sawCookie = r.Header.Get("Cookie")
+		_, _ = w.Write([]byte(`{"code":"SUCCESS"}`))
+	}))
+	defer srv.Close()
+
+	// base_url points at a DIFFERENT host than the request → cookie withheld.
+	prof := &clifconfig.Profile{
+		BaseURL: "https://configured.example.com",
+		Auth:    clifconfig.AuthProfile{AuthCookie: "SECRET", AuthCookieName: "session"},
+	}
+	c := NewHTTPClient(prof)
+	if _, err := c.GetSpot(srv.URL, nil); err != nil {
+		t.Fatalf("request: %v", err)
+	}
+	if strings.Contains(sawCookie, "SECRET") {
+		t.Fatalf("cookie sent to non-configured host: %q", sawCookie)
+	}
+}
+
+// TestRedactBody masks sensitive fields (BIFU-CLI-202606-005).
+func TestRedactBody(t *testing.T) {
+	in := `{"username":"u","password":"hunter2","nested":{"token":"abc"}}`
+	out := redactBody(in)
+	if strings.Contains(out, "hunter2") || strings.Contains(out, "abc") {
+		t.Fatalf("secrets not redacted: %s", out)
+	}
+	if !strings.Contains(out, `"username":"u"`) {
+		t.Fatalf("non-secret field dropped: %s", out)
+	}
+}

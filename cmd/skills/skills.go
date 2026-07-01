@@ -155,7 +155,12 @@ func resolveTarget(client string, global bool, args []string) (dir string, curso
 	case "":
 		dir = "bifu-skills"
 		if len(args) == 1 {
-			dir = expandHome(args[0], home)
+			dir = filepath.Clean(expandHome(args[0], home))
+			// Reject a symlinked target so a pre-planted symlink can't redirect the
+			// write outside the intended directory (BIFU-CLI-202606-027).
+			if fi, err := os.Lstat(dir); err == nil && fi.Mode()&os.ModeSymlink != 0 {
+				return "", false, fmt.Errorf("refusing to install into a symlink: %s", dir)
+			}
 		}
 		return dir, false, nil
 	default:

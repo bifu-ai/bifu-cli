@@ -87,6 +87,7 @@ func resultText(m map[string]any) (text string, isErr bool) {
 // where MCP create tools sent an empty clientOrderId (INVALID_CLIENT_ORDER_ID).
 func TestCreateSpotOrderSendsClientOrderID(t *testing.T) {
 	t.Setenv("BIFU_CLI_HOME", t.TempDir())
+	t.Setenv("BIFU_MCP_ALLOW_TRADE", "1")
 	var body string
 	srv := startMockBackend(&body)
 	defer srv.Close()
@@ -115,6 +116,7 @@ func TestCreateSpotOrderSendsClientOrderID(t *testing.T) {
 // TestCreateContractOrderSendsClientOrderID guards the contract create path.
 func TestCreateContractOrderSendsClientOrderID(t *testing.T) {
 	t.Setenv("BIFU_CLI_HOME", t.TempDir())
+	t.Setenv("BIFU_MCP_ALLOW_TRADE", "1")
 	var body string
 	srv := startMockBackend(&body)
 	defer srv.Close()
@@ -143,6 +145,7 @@ func TestCreateContractOrderSendsClientOrderID(t *testing.T) {
 // its numeric id before the order is sent.
 func TestMCPResolvesSymbolName(t *testing.T) {
 	t.Setenv("BIFU_CLI_HOME", t.TempDir())
+	t.Setenv("BIFU_MCP_ALLOW_TRADE", "1")
 	var body string
 	srv := startMockBackend(&body)
 	defer srv.Close()
@@ -160,5 +163,70 @@ func TestMCPResolvesSymbolName(t *testing.T) {
 	_ = json.Unmarshal([]byte(body), &req)
 	if req.SymbolID != "90000001" {
 		t.Errorf("symbolId sent = %q, want resolved 90000001", req.SymbolID)
+	}
+}
+
+// TestWriteToolsDisabledByDefault verifies order placement is refused unless
+// BIFU_MCP_ALLOW_TRADE is set (BIFU-CLI-202606-001).
+func TestWriteToolsDisabledByDefault(t *testing.T) {
+	t.Setenv("BIFU_CLI_HOME", t.TempDir())
+	// Deliberately NOT setting BIFU_MCP_ALLOW_TRADE.
+	var body string
+	srv := startMockBackend(&body)
+	defer srv.Close()
+
+	m := invoke(t, srv.URL, "create_spot_order", map[string]any{
+		"symbolId": "90000001", "side": "BUY", "type": "MARKET", "size": "0.1",
+	})
+	txt, isErr := resultText(m)
+	if !isErr {
+		t.Fatalf("expected error result when trading disabled, got: %s", txt)
+	}
+	if !strings.Contains(txt, "BIFU_MCP_ALLOW_TRADE") {
+		t.Fatalf("error should mention the enable flag, got: %s", txt)
+	}
+	if body != "" {
+		t.Fatalf("a backend request was made despite trading being disabled: %s", body)
+	}
+}
+
+// TestInvalidSizeRejected verifies client-side numeric validation (001).
+func TestInvalidSizeRejected(t *testing.T) {
+	t.Setenv("BIFU_CLI_HOME", t.TempDir())
+	t.Setenv("BIFU_MCP_ALLOW_TRADE", "1")
+	var body string
+	srv := startMockBackend(&body)
+	defer srv.Close()
+
+	m := invoke(t, srv.URL, "create_spot_order", map[string]any{
+		"symbolId": "90000001", "side": "BUY", "type": "MARKET", "size": "-5",
+	})
+	if _, isErr := resultText(m); !isErr {
+		t.Fatalf("expected error for negative size")
+	}
+	if body != "" {
+		t.Fatalf("negative size reached backend: %s", body)
+	}
+}
+
+// TestCloseRequiresReduceOnly verifies the contract cross-field invariant (017).
+func TestCloseRequiresReduceOnly(t *testing.T) {
+	t.Setenv("BIFU_CLI_HOME", t.TempDir())
+	t.Setenv("BIFU_MCP_ALLOW_TRADE", "1")
+	var body string
+	srv := startMockBackend(&body)
+	defer srv.Close()
+
+	// LONG + SELL without reduceOnly = closing a long without the flag → rejected.
+	m := invoke(t, srv.URL, "create_contract_order", map[string]any{
+		"contractId": "10000001", "positionSide": "LONG", "orderSide": "SELL",
+		"type": "MARKET", "size": "0.001",
+	})
+	txt, isErr := resultText(m)
+	if !isErr {
+		t.Fatalf("expected error for LONG+SELL without reduceOnly, got: %s", txt)
+	}
+	if !strings.Contains(txt, "reduceOnly") {
+		t.Fatalf("error should mention reduceOnly, got: %s", txt)
 	}
 }

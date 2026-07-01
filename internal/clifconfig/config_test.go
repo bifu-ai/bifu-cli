@@ -109,27 +109,31 @@ func TestActiveCreatesMissingProfile(t *testing.T) {
 func TestGenerateClientOrderID(t *testing.T) {
 	ts := time.Date(2026, 6, 28, 12, 30, 45, 0, time.UTC)
 
-	t.Run("with user id", func(t *testing.T) {
+	t.Run("format without user id", func(t *testing.T) {
+		// user_id must NOT be embedded (BIFU-CLI-202606-009).
 		p := &Profile{Auth: AuthProfile{UserID: "109150807"}}
 		got := p.GenerateClientOrderID("BTCUSDT", "BUY", ts)
-		want := "109150807-btcusdt-buy-20260628123045"
-		if got != want {
-			t.Errorf("got %q, want %q", got, want)
+		prefix := "btcusdt-buy-20260628123045-"
+		if !strings.HasPrefix(got, prefix) {
+			t.Errorf("got %q, want prefix %q", got, prefix)
+		}
+		if strings.Contains(got, "109150807") {
+			t.Errorf("client order id %q leaks user_id", got)
 		}
 	})
 
-	t.Run("anonymous fallback", func(t *testing.T) {
+	t.Run("random suffix avoids same-second collision", func(t *testing.T) {
 		p := &Profile{}
-		got := p.GenerateClientOrderID("ETHUSDT", "SELL", ts)
-		want := "anon-ethusdt-sell-20260628123045"
-		if got != want {
-			t.Errorf("got %q, want %q", got, want)
+		a := p.GenerateClientOrderID("ETHUSDT", "SELL", ts)
+		b := p.GenerateClientOrderID("ETHUSDT", "SELL", ts)
+		if a == b {
+			t.Errorf("two same-second ids collided: %q", a)
 		}
 	})
 
 	t.Run("truncated to 64 chars", func(t *testing.T) {
-		p := &Profile{Auth: AuthProfile{UserID: strings.Repeat("X", 80)}}
-		got := p.GenerateClientOrderID("BTCUSDT", "BUY", ts)
+		p := &Profile{}
+		got := p.GenerateClientOrderID(strings.Repeat("X", 80), "BUY", ts)
 		if len(got) != maxClientOrderIDLen {
 			t.Errorf("len = %d, want %d", len(got), maxClientOrderIDLen)
 		}
@@ -162,10 +166,20 @@ func TestWSURLBuilders(t *testing.T) {
 		t.Errorf("GetWSMarketURL = %q, want %q", got, want)
 	}
 
-	// An absolute ws:// override is returned as-is.
+	// An absolute wss:// override is returned as-is.
 	p.WSPrivate = "wss://other.host/ws"
 	if got, want := p.GetWSPrivateURL(), "wss://other.host/ws"; got != want {
 		t.Errorf("GetWSPrivateURL = %q, want %q", got, want)
+	}
+
+	// A plaintext ws:// private stream is force-upgraded to wss:// (007).
+	p.WSPrivate = "ws://other.host/ws"
+	if got, want := p.GetWSPrivateURL(), "wss://other.host/ws"; got != want {
+		t.Errorf("GetWSPrivateURL ws:// upgrade = %q, want %q", got, want)
+	}
+	p.WSPrivateSpot = "ws://spot.host/ws"
+	if got, want := p.GetWSPrivateSpotURL(), "wss://spot.host/ws"; got != want {
+		t.Errorf("GetWSPrivateSpotURL ws:// upgrade = %q, want %q", got, want)
 	}
 }
 

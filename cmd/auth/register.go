@@ -13,6 +13,7 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
+	"bifu-cli/internal/client"
 	"bifu-cli/internal/clifconfig"
 )
 
@@ -145,7 +146,7 @@ func doRegister(baseURL, email, password, locale, referrer, terminalType string)
 	req.Header.Set("Content-Type", "application/json")
 	setLoginHeaders(req, terminalType)
 
-	resp, err := (&http.Client{Timeout: 30 * time.Second}).Do(req)
+	resp, err := client.NewSecureHTTPClient(30 * time.Second).Do(req)
 	if err != nil {
 		return "", err
 	}
@@ -181,7 +182,7 @@ func doActivate(baseURL, issueID, code, terminalType string) (cookieName, cookie
 	req.Header.Set("Content-Type", "application/json")
 	setLoginHeaders(req, terminalType)
 
-	resp, err := (&http.Client{Timeout: 30 * time.Second}).Do(req)
+	resp, err := client.NewSecureHTTPClient(30 * time.Second).Do(req)
 	if err != nil {
 		return "", "", err
 	}

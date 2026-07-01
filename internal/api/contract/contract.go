@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"bifu-cli/internal/client"
 	"bifu-cli/internal/clifconfig"
@@ -96,10 +97,33 @@ type AccountInfo struct {
 	Assets    []accountAsset // aggregated from getAccountAsset
 }
 
+// Validate enforces cross-field invariants so a "close" order can't silently
+// become an "open" one (BIFU-CLI-202606-017). It is applied in the API layer so
+// both the CLI and the MCP server are covered. Open long = LONG+BUY, close long
+// = LONG+SELL+reduceOnly; open short = SHORT+SELL, close short =
+// SHORT+BUY+reduceOnly.
+func (r *CreateOrderReq) Validate() error {
+	ps, os := strings.ToUpper(r.PositionSide), strings.ToUpper(r.OrderSide)
+	closing := (ps == "LONG" && os == "SELL") || (ps == "SHORT" && os == "BUY")
+	opening := (ps == "LONG" && os == "BUY") || (ps == "SHORT" && os == "SELL")
+	switch {
+	case !opening && !closing:
+		return fmt.Errorf("invalid positionSide/orderSide combination: %s/%s", r.PositionSide, r.OrderSide)
+	case closing && !r.ReduceOnly:
+		return fmt.Errorf("closing a %s position (orderSide=%s) requires reduceOnly=true", r.PositionSide, r.OrderSide)
+	case opening && r.ReduceOnly:
+		return fmt.Errorf("opening a %s position must not set reduceOnly=true", r.PositionSide)
+	}
+	return nil
+}
+
 // ── Methods ───────────────────────────────────────────────────────────────────
 
 // CreateOrder places a new contract order.
 func (c *Client) CreateOrder(req *CreateOrderReq) (*OrderResp, error) {
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
 	u := c.profile.GetPrivateURL("/contract/order/createOrder")
 	raw, err := c.http.PostContract(u, req)
 	if err != nil {
@@ -252,7 +276,7 @@ func parsePageDataOrders(raw []byte) ([]Order, error) {
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(raw, &wrapper); err != nil {
-		return nil, fmt.Errorf("parse page response: %w (body: %.200s)", err, raw)
+		return nil, fmt.Errorf("parse page response: %w", err)
 	}
 	if wrapper.Code != "SUCCESS" {
 		return nil, fmt.Errorf("API error: %s - %s", wrapper.Code, wrapper.Message)
@@ -273,7 +297,7 @@ func parsePageDataPositions(raw []byte) ([]Position, error) {
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(raw, &wrapper); err != nil {
-		return nil, fmt.Errorf("parse page response: %w (body: %.200s)", err, raw)
+		return nil, fmt.Errorf("parse page response: %w", err)
 	}
 	if wrapper.Code != "SUCCESS" {
 		return nil, fmt.Errorf("API error: %s - %s", wrapper.Code, wrapper.Message)

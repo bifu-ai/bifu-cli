@@ -7,12 +7,14 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
 
+	"bifu-cli/internal/client"
 	"bifu-cli/internal/output"
 )
 
@@ -21,7 +23,7 @@ const releasesRepo = "decodeex/bifu-cli-releases"
 
 // latestVersion fetches the newest published release tag (e.g. "v1.1.2").
 func latestVersion() (string, error) {
-	c := &http.Client{Timeout: 10 * time.Second}
+	c := client.NewSecureHTTPClient(10 * time.Second)
 	resp, err := c.Get("https://api.github.com/repos/" + releasesRepo + "/releases/latest")
 	if err != nil {
 		return "", err
@@ -142,8 +144,14 @@ method it was installed with (Homebrew, npm, or the curl installer).
 			}
 			fmt.Printf("→ %s\n", command)
 			// command is a fixed string from installMethod() (brew/npm/curl), not
-			// user input, so there is no shell-injection surface here.
-			c := exec.Command("sh", "-c", command) // #nosec G204 -- command is a hardcoded constant, not user-controlled
+			// user input, so there is no shell-injection surface here. Windows has
+			// no `sh`, so dispatch through cmd.exe there (BIFU-CLI-202606-011).
+			var c *exec.Cmd
+			if runtime.GOOS == "windows" {
+				c = exec.Command("cmd", "/c", command) // #nosec G204 -- command is a hardcoded constant, not user-controlled
+			} else {
+				c = exec.Command("sh", "-c", command) // #nosec G204 -- command is a hardcoded constant, not user-controlled
+			}
 			c.Stdin, c.Stdout, c.Stderr = os.Stdin, os.Stdout, os.Stderr
 			if err := c.Run(); err != nil {
 				return fmt.Errorf("upgrade command failed: %w", err)

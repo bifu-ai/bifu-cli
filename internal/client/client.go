@@ -43,13 +43,16 @@ func startSpinner(label string, verbose bool) func() {
 // (spot / contract / payment / forex) use the same user_auth_name session cookie
 // obtained via `bifu-cli auth login`.
 type AuthManager struct {
-	mu      sync.RWMutex
-	profile *clifconfig.AuthProfile
+	mu        sync.RWMutex
+	profile   *clifconfig.AuthProfile
+	boundHost string // host the session cookie is allowed to be sent to
 }
 
 // NewAuthManager creates an AuthManager from the active profile auth section.
-func NewAuthManager(auth *clifconfig.AuthProfile) *AuthManager {
-	return &AuthManager{profile: auth}
+// boundHost is the host (from the profile's base_url) the session cookie may be
+// sent to; the cookie is withheld from any other host (BIFU-CLI-202606-003).
+func NewAuthManager(auth *clifconfig.AuthProfile, boundHost string) *AuthManager {
+	return &AuthManager{profile: auth, boundHost: boundHost}
 }
 
 // ApplyCookie sets the user_auth_name cookie header.
@@ -60,9 +63,16 @@ func (am *AuthManager) ApplyCookie(req *http.Request) {
 }
 
 func (am *AuthManager) applyCookieLocked(req *http.Request) {
-	if am.profile.AuthCookie != "" {
-		req.Header.Set("Cookie", am.profile.AuthCookieName+"="+am.profile.AuthCookie)
+	if am.profile.AuthCookie == "" {
+		return
 	}
+	// Bind the trading session cookie to the host it was configured for. Even if
+	// a request URL is somehow pointed elsewhere, the cookie is never sent to a
+	// foreign host (complements the redirect-stripping policy).
+	if am.boundHost != "" && !strings.EqualFold(req.URL.Host, am.boundHost) {
+		return
+	}
+	req.Header.Set("Cookie", am.profile.AuthCookieName+"="+am.profile.AuthCookie)
 }
 
 // ── HTTP Client ───────────────────────────────────────────────────────────────
@@ -78,6 +88,51 @@ type HTTPClient struct {
 // SetVerbose enables or disables HTTP request/response logging.
 func (c *HTTPClient) SetVerbose(v bool) { c.Verbose = v }
 
+// authTransport returns an http.RoundTripper for the authenticated clients.
+// It clones the stdlib default transport but DISABLES proxy resolution: by
+// default net/http honours HTTP_PROXY/HTTPS_PROXY, which on a shared machine /
+// CI / a malicious env lets an attacker funnel our session cookie and login
+// requests through their proxy (BIFU-CLI-202606-018). bifu-cli talks only to
+// its own first-party API over TLS, so a proxy is never required.
+func authTransport() http.RoundTripper {
+	base, ok := http.DefaultTransport.(*http.Transport)
+	if !ok {
+		return &http.Transport{Proxy: nil}
+	}
+	t := base.Clone()
+	t.Proxy = nil
+	return t
+}
+
+// stripCookieOnRedirect is the http.Client CheckRedirect policy. The session
+// cookie is injected as a manual Cookie header (not via a cookie jar), and Go's
+// default redirect policy does NOT strip a manually-set header on a cross-host
+// 302 — so a redirect to another host would leak the full trading token
+// (BIFU-CLI-202606-002). We drop the Cookie header whenever the redirect target
+// host differs from the previous request, and cap the redirect chain.
+func stripCookieOnRedirect(req *http.Request, via []*http.Request) error {
+	if len(via) >= 10 {
+		return fmt.Errorf("stopped after 10 redirects")
+	}
+	if len(via) > 0 && req.URL.Host != via[len(via)-1].URL.Host {
+		req.Header.Del("Cookie")
+	}
+	return nil
+}
+
+// NewSecureHTTPClient returns a bare *http.Client with proxy resolution
+// disabled and cross-host Cookie stripped on redirect. The auth commands
+// (login / logout / register) build their own one-off clients that carry the
+// password or session cookie, so they must not honour HTTP_PROXY/HTTPS_PROXY
+// either (BIFU-CLI-202606-018).
+func NewSecureHTTPClient(timeout time.Duration) *http.Client {
+	return &http.Client{
+		Timeout:       timeout,
+		Transport:     authTransport(),
+		CheckRedirect: stripCookieOnRedirect,
+	}
+}
+
 // NewHTTPClient creates a profile-aware HTTP client. All authenticated
 // endpoints (spot / contract / payment / forex) share the same session-cookie
 // auth, so a single constructor serves every API client.
@@ -86,10 +141,18 @@ func NewHTTPClient(profile *clifconfig.Profile) *HTTPClient {
 	if timeout == 0 {
 		timeout = 30 * time.Second
 	}
+	var boundHost string
+	if u, err := url.Parse(profile.BaseURL); err == nil {
+		boundHost = u.Host
+	}
 	return &HTTPClient{
-		http:    &http.Client{Timeout: timeout},
+		http: &http.Client{
+			Timeout:       timeout,
+			Transport:     authTransport(),
+			CheckRedirect: stripCookieOnRedirect,
+		},
 		profile: profile,
-		auth:    NewAuthManager(&profile.Auth),
+		auth:    NewAuthManager(&profile.Auth, boundHost),
 	}
 }
 
@@ -159,7 +222,7 @@ func (c *HTTPClient) do(method, rawURL string, params map[string]string, body in
 	if c.Verbose {
 		fmt.Fprintf(os.Stderr, "[HTTP] %s %s\n", method, u.String())
 		if bodyStr != "" {
-			fmt.Fprintf(os.Stderr, "[HTTP]   body: %s\n", bodyStr)
+			fmt.Fprintf(os.Stderr, "[HTTP]   body: %s\n", redactBody(bodyStr))
 		}
 	}
 
@@ -203,7 +266,7 @@ func (c *HTTPClient) do(method, rawURL string, params map[string]string, body in
 
 		if c.Verbose {
 			fmt.Fprintf(os.Stderr, "[HTTP] <- %d (%dms) body: %s\n",
-				statusCode, time.Since(start).Milliseconds(), truncate(string(data), 500))
+				statusCode, time.Since(start).Milliseconds(), truncate(redactBody(string(data)), 500))
 		}
 
 		if attempt < attempts && isTransient(statusCode, data) {
@@ -217,17 +280,13 @@ func (c *HTTPClient) do(method, rawURL string, params map[string]string, body in
 	case statusCode == 401:
 		return nil, fmt.Errorf("authentication failed (HTTP 401): session expired or invalid — run `bifu-cli auth login`")
 	case statusCode == 403:
-		msg := strings.TrimSpace(string(data))
-		if msg == "" {
-			msg = "access denied"
-		}
-		return nil, fmt.Errorf("access denied (HTTP 403): %s", msg)
+		return nil, fmt.Errorf("access denied (HTTP 403): %s", c.errDetail(data, "access denied"))
 	case statusCode == 404:
 		return nil, fmt.Errorf("endpoint not found (HTTP 404): %s", rawURL)
 	case statusCode >= 500:
 		return nil, fmt.Errorf("server error (HTTP %d) — please retry in a moment", statusCode)
 	case statusCode >= 400:
-		return nil, fmt.Errorf("HTTP error %d: %s", statusCode, strings.TrimSpace(string(data)))
+		return nil, fmt.Errorf("HTTP error %d: %s", statusCode, c.errDetail(data, "request rejected"))
 	}
 
 	return &HTTPResponse{
@@ -286,7 +345,7 @@ func ParseAPIResponse(raw []byte, dst interface{}) error {
 	var resp APIResponse
 	resp.Data = dst
 	if err := json.Unmarshal(raw, &resp); err != nil {
-		return fmt.Errorf("unmarshal: %w (body: %s)", err, truncate(string(raw), 200))
+		return fmt.Errorf("unmarshal: %w (body: %s)", err, redactBody(string(raw)))
 	}
 	if resp.Code != "SUCCESS" && resp.Code != "" {
 		return fmt.Errorf("API error [%s]: %s", resp.Code, resp.GetMessage())
@@ -309,7 +368,7 @@ func ParsePaymentResponse(raw []byte, dst interface{}) error {
 		RetMsg  string      `json:"retMsg"`
 	}
 	if err := json.Unmarshal(raw, &shell); err != nil {
-		return fmt.Errorf("unmarshal: %w (body: %s)", err, truncate(string(raw), 200))
+		return fmt.Errorf("unmarshal: %w (body: %s)", err, redactBody(string(raw)))
 	}
 	code := fmt.Sprintf("%v", shell.RetCode)
 	if code != "0" && code != "<nil>" && code != "" {
@@ -335,4 +394,53 @@ func truncate(s string, n int) string {
 		return s
 	}
 	return s[:n] + "..."
+}
+
+// sensitiveKeys are JSON field names whose values must never be logged verbatim.
+var sensitiveKeys = map[string]bool{
+	"password": true, "passwd": true, "pwd": true,
+	"token": true, "secret": true, "cookie": true,
+	"authcookie": true, "auth_cookie": true, "apikey": true, "api_key": true,
+}
+
+// redactBody masks sensitive fields in a JSON request/response body before it is
+// written to a verbose log. The forex create-account body carries a plaintext
+// account password, and responses carry financial PII; logging them verbatim is
+// BIFU-CLI-202606-005. Non-JSON bodies are truncated rather than echoed whole.
+func redactBody(bodyStr string) string {
+	var m map[string]any
+	if json.Unmarshal([]byte(bodyStr), &m) != nil {
+		return truncate(bodyStr, 200)
+	}
+	redactMap(m)
+	b, err := json.Marshal(m)
+	if err != nil {
+		return truncate(bodyStr, 200)
+	}
+	return string(b)
+}
+
+func redactMap(m map[string]any) {
+	for k, v := range m {
+		if sensitiveKeys[strings.ToLower(k)] {
+			m[k] = "***"
+			continue
+		}
+		if child, ok := v.(map[string]any); ok {
+			redactMap(child)
+		}
+	}
+}
+
+// errDetail returns a body detail for an HTTP error message. The upstream body
+// may contain account IDs, emails, or internal stack traces, so it is only
+// surfaced under verbose mode and redacted (BIFU-CLI-202606-022); otherwise a
+// short generic fallback is used.
+func (c *HTTPClient) errDetail(data []byte, fallback string) string {
+	if c.Verbose {
+		if d := strings.TrimSpace(redactBody(string(data))); d != "" {
+			return truncate(d, 500)
+		}
+	}
+	return fallback
 }
