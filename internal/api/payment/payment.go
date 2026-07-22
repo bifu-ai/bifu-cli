@@ -100,7 +100,8 @@ type ForexAccountItem struct {
 	MarginLevel string `json:"marginLevel"`
 	Group       string `json:"group"`
 	GroupType   string `json:"groupType"`
-	MtType      int    `json:"mtType"` // 1=MT4, 2=MT5, 3=TradFi(Fortex)
+	MtType      int    `json:"mtType"`      // 1=MT4, 2=MT5, 3=TradFi(Fortex)
+	Mt5ServerID string `json:"mt5ServerId"` // "legacy"|"new"; only meaningful for MT4/MT5, empty for TradFi
 	Currency    string `json:"currency"`
 	IsDefault   bool   `json:"isDefault"`
 	Enable      bool   `json:"enable"`
@@ -118,6 +119,19 @@ func (a ForexAccountItem) PlatformName() string {
 	default:
 		return fmt.Sprintf("mt%d", a.MtType)
 	}
+}
+
+// ServerLabel returns "new" for accounts on the new-licensed-entity MT5 server
+// (new account or already migrated), "legacy" for the old server, and "" for
+// non-MT5 platforms (mt5ServerId is not meaningful there).
+func (a ForexAccountItem) ServerLabel() string {
+	if a.MtType != 1 && a.MtType != 2 {
+		return ""
+	}
+	if a.Mt5ServerID == "" {
+		return "legacy"
+	}
+	return a.Mt5ServerID
 }
 
 type CreateForexOrderReq struct {

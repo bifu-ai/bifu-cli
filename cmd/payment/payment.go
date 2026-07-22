@@ -214,9 +214,9 @@ func newForexAccountsCmd(load LoadFn) *cobra.Command {
 			}
 			rows := make([][]string, 0, len(items))
 			for _, a := range items {
-				rows = append(rows, []string{a.Login, a.ID, a.PlatformName(), a.Type + "/" + a.SubType, a.Status, a.Balance, a.Equity, a.MarginFree, a.Leverage, a.GroupType})
+				rows = append(rows, []string{a.Login, a.ID, a.PlatformName(), a.ServerLabel(), a.Type + "/" + a.SubType, a.Status, a.Balance, a.Equity, a.MarginFree, a.Leverage, a.GroupType})
 			}
-			pr.PrintTable([]string{"LOGIN", "ACCOUNT_ID", "PLATFORM", "TYPE", "STATUS", "BALANCE", "EQUITY", "FREE MARGIN", "LEVERAGE", "GROUP"}, rows)
+			pr.PrintTable([]string{"LOGIN", "ACCOUNT_ID", "PLATFORM", "SERVER", "TYPE", "STATUS", "BALANCE", "EQUITY", "FREE MARGIN", "LEVERAGE", "GROUP"}, rows)
 			return nil
 		},
 	}

@@ -117,6 +117,7 @@ func newAccountCreate(load LoadFn) *cobra.Command {
 				{Key: "Login", Value: acct.Login},
 				{Key: "Account ID", Value: acct.ID}, // internal id — use as --to-account-id when funding
 				{Key: "Platform", Value: acct.PlatformName()},
+				{Key: "Server", Value: acct.ServerLabel()},
 				{Key: "Type", Value: acct.Type + "/" + acct.SubType},
 				{Key: "Currency", Value: acct.Currency},
 				{Key: "Leverage", Value: acct.Leverage},

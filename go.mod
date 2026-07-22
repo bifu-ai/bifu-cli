@@ -2,7 +2,7 @@ module bifu-cli
 
 go 1.25.5
 
-toolchain go1.25.11
+toolchain go1.25.12
 
 require (
 	github.com/briandowns/spinner v1.23.2
