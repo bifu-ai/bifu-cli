@@ -108,7 +108,7 @@ Backed by the existing scan-to-login endpoints
 				termType = "API"
 			}
 			fmt.Printf("Logging in as %s...\n", username)
-			issueID, err := doLogin(baseURL, username, password, termType)
+			issueID, checkMethod, err := doLogin(baseURL, username, password, termType)
 			if err != nil {
 				return fmt.Errorf("login failed: %w", err)
 			}
@@ -119,10 +119,11 @@ Backed by the existing scan-to-login endpoints
 			if strings.HasPrefix(issueID, "COOKIE:") {
 				cookieName, cookieVal = extractCookie(strings.TrimPrefix(issueID, "COOKIE:"))
 			} else {
-				fmt.Println("✓ Password accepted, verification code sent to email")
+				sentMsg, codePrompt := codePromptFor(checkMethod)
+				fmt.Println(sentMsg)
 
 				// ── Step 2: prompt for verification code ──────────────────────────
-				fmt.Print("Verification code: ")
+				fmt.Print(codePrompt)
 				codeLine, _ := reader.ReadString('\n')
 				code := strings.TrimSpace(codeLine)
 				if code == "" {
@@ -446,15 +447,17 @@ type loginResp struct {
 		} `json:"user"`
 		DoubleCheck struct {
 			IssueID string `json:"issueId"`
+			// ga = Google Authenticator (no email/SMS is sent), email, sms
+			CheckMethods []string `json:"checkMethods"`
 		} `json:"doubleCheck"`
 	} `json:"result"`
 }
 
-func doLogin(baseURL, username, password, terminalType string) (issueID string, err error) {
+func doLogin(baseURL, username, password, terminalType string) (issueID, checkMethod string, err error) {
 	body, _ := json.Marshal(loginReq{Username: username, Password: password}) // #nosec G117 -- login request body sent to the auth API over TLS; not persisted/logged
 	req, err := http.NewRequest("POST", baseURL+"/user/login", bytes.NewReader(body))
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("terminalType", terminalType)
@@ -464,25 +467,44 @@ func doLogin(baseURL, username, password, terminalType string) (issueID string, 
 	c := client.NewSecureHTTPClient(30 * time.Second)
 	resp, err := c.Do(req)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	defer resp.Body.Close()
 
 	var out loginResp
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
-		return "", fmt.Errorf("decode response: %w", err)
+		return "", "", fmt.Errorf("decode response: %w", err)
 	}
 	if out.RetCode != "0" {
-		return "", fmt.Errorf("[%s] %s", out.RetCode, out.RetMsg)
+		return "", "", fmt.Errorf("[%s] %s", out.RetCode, out.RetMsg)
 	}
 	// Direct cookie (no 2FA required)
 	if out.Result.CookieStr != "" {
-		return "COOKIE:" + out.Result.CookieStr, nil
+		return "COOKIE:" + out.Result.CookieStr, "", nil
 	}
 	if out.Result.DoubleCheck.IssueID == "" {
-		return "", fmt.Errorf("no issueId returned — check credentials")
+		return "", "", fmt.Errorf("no issueId returned — check credentials")
 	}
-	return out.Result.DoubleCheck.IssueID, nil
+	method := ""
+	if len(out.Result.DoubleCheck.CheckMethods) > 0 {
+		method = out.Result.DoubleCheck.CheckMethods[0]
+	}
+	return out.Result.DoubleCheck.IssueID, method, nil
+}
+
+// codePromptFor describes where the verification code comes from, so accounts
+// secured with an authenticator app are not told to check their inbox.
+func codePromptFor(method string) (sentMsg, prompt string) {
+	switch strings.ToLower(method) {
+	case "ga":
+		return "✓ Password accepted, enter the code from your authenticator app", "Authenticator code: "
+	case "sms":
+		return "✓ Password accepted, verification code sent by SMS", "Verification code: "
+	case "email":
+		return "✓ Password accepted, verification code sent to email", "Verification code: "
+	default:
+		return "✓ Password accepted, verification code required", "Verification code: "
+	}
 }
 
 type loginCheckReq struct {
