@@ -102,7 +102,6 @@ type Worker struct {
 	apiHealthy  bool
 }
 
-
 // logf prints a timestamped operational line (always visible; the worker is a
 // long-running daemon, so these are not verbose-gated).
 func (w *Worker) logf(format string, args ...any) {
