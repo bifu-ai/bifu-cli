@@ -51,7 +51,7 @@ type Config struct {
 	APIKey              string // gwk_… issued by the gateway admin
 	WorkerID            string
 	LoginID             int64
-	Symbol              string  // MT5 symbol on the bifu account, e.g. XAUUSD
+	Symbol              string  // MT5 symbol on the bifu account, e.g. XAUUSD.e（bifu 品种带 .e 后缀）
 	Volume              float64 // default lot size when the signal has none
 	Live                bool    // master switch: false = dry-run everything
 	DefaultSourceStatus string  // test | live — status for newly seen sources
@@ -318,8 +318,8 @@ func (w *Worker) collectTelemetry() map[string]any {
 			positions = append(positions, map[string]any{
 				"ticket":      o.Ticket,
 				"symbol":      o.Symbol,
-				"direction":   strings.ToLower(o.OrderType),
-				"size":        parseF(o.Volume),
+				"direction":   direction(o),
+				"size":        lotsOf(o),
 				"entry_price": parseF(o.OpenPrice),
 				"pnl":         parseF(o.Profit),
 			})
@@ -486,7 +486,7 @@ func (w *Worker) doClose(s *Signal, dryRun bool) error {
 	}
 	var targets []paymentapi.ForexOpenOrder
 	for _, p := range positions {
-		dir := strings.ToLower(p.OrderType)
+		dir := direction(p)
 		switch s.SignalType {
 		case "close_long":
 			if dir != "buy" {
@@ -511,7 +511,7 @@ func (w *Worker) doClose(s *Signal, dryRun bool) error {
 			if terr != nil {
 				continue
 			}
-			vol := math.Floor(parseF(p.Volume)*s.CloseRatio*100) / 100
+			vol := math.Floor(lotsOf(p)*s.CloseRatio*100) / 100
 			if vol <= 0 {
 				continue
 			}
@@ -664,7 +664,24 @@ func (w *Worker) saveStateLocked() {
 
 func isPosition(orderType string) bool {
 	t := strings.ToLower(orderType)
-	return t == "buy" || t == "sell"
+	// 后端持仓 orderType=Market（方向另在 side 字段）；buy/sell 兼容旧形态
+	return t == "market" || t == "buy" || t == "sell"
+}
+
+// direction 返回 buy/sell：优先 side 字段（Market 类型不含方向）。
+func direction(o paymentapi.ForexOpenOrder) string {
+	if o.Side != "" {
+		return strings.ToLower(o.Side)
+	}
+	return strings.ToLower(o.OrderType)
+}
+
+// lotsOf 返回手数：lots 字段为准（volume 是另一种口径）。
+func lotsOf(o paymentapi.ForexOpenOrder) float64 {
+	if o.Lots != "" {
+		return parseF(o.Lots)
+	}
+	return parseF(o.Volume)
 }
 
 func parseF(s string) float64 {
