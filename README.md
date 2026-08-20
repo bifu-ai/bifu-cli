@@ -771,10 +771,10 @@ STD    1 month     100    no     yes     on
 
 ```bash
 # 先 dry-run 观察(默认,只打印将执行的动作,不下单)
-bifu-cli orion worker --api-key gwk_xxx --login-id 90390034 --symbol XAUUSD
+bifu-cli orion worker --api-key gwk_xxx --login-id 90390034 --symbol XAUUSD.e
 
 # 实盘执行,每单默认 0.01 手(信号自带手数时优先用信号的)
-bifu-cli orion worker --api-key gwk_xxx --login-id 90390034 --symbol XAUUSD --volume 0.01 --live
+bifu-cli orion worker --api-key gwk_xxx --login-id 90390034 --symbol XAUUSD.e --volume 0.01 --live
 ```
 
 | Flag | 默认 | 说明 |
@@ -782,7 +782,7 @@ bifu-cli orion worker --api-key gwk_xxx --login-id 90390034 --symbol XAUUSD --vo
 | `--api-key` | 环境变量 `BIFU_RELAY_API_KEY` | gateway 颁发的 worker key(`gwk_…`) |
 | `--gateway-url` | `wss://gw.relaysignal.dev` | gateway WebSocket 地址 |
 | `--login-id` | (必填) | 执行下单的 MT5 账号 |
-| `--symbol` | `XAUUSD` | 交易品种 |
+| `--symbol` | `XAUUSD.e` | 交易品种（bifu MT5 品种带 `.e` 后缀，裸 `XAUUSD` 会被 10013 拒单） |
 | `--volume` | `0.01` | 信号未带手数时的默认手数 |
 | `--live` | 关 | 实盘总开关;不加则全部 dry-run |
 | `--default-source-status` | `test` | 新信号源的初始规则(`test`/`live`) |

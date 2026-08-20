@@ -122,10 +122,10 @@ func TestSourceRuleTestModePlacesNothing(t *testing.T) {
 
 func TestCloseLongOnlyClosesBuys(t *testing.T) {
 	api := &fakeForex{openOrders: []paymentapi.ForexOpenOrder{
-		{Ticket: "11", Symbol: "XAUUSD", OrderType: "buy", Volume: "0.02"},
-		{Ticket: "12", Symbol: "XAUUSD", OrderType: "sell", Volume: "0.02"},
-		{Ticket: "13", Symbol: "EURUSD", OrderType: "buy", Volume: "0.02"},
-		{Ticket: "14", Symbol: "XAUUSD", OrderType: "buyLimit", Volume: "0.02"},
+		{Ticket: "11", Symbol: "XAUUSD", OrderType: "Market", Side: "Buy", Lots: "0.02"},
+		{Ticket: "12", Symbol: "XAUUSD", OrderType: "Market", Side: "Sell", Lots: "0.02"},
+		{Ticket: "13", Symbol: "EURUSD", OrderType: "Market", Side: "Buy", Lots: "0.02"},
+		{Ticket: "14", Symbol: "XAUUSD", OrderType: "Limit", Side: "Buy", Lots: "0.02"},
 	}}
 	w := newTestWorker(t, api, true)
 	w.executeSignal(sig("close_long"))
@@ -140,7 +140,7 @@ func TestCloseLongOnlyClosesBuys(t *testing.T) {
 
 func TestPartialCloseUsesRatio(t *testing.T) {
 	api := &fakeForex{openOrders: []paymentapi.ForexOpenOrder{
-		{Ticket: "21", Symbol: "XAUUSD", OrderType: "sell", Volume: "0.10"},
+		{Ticket: "21", Symbol: "XAUUSD", OrderType: "Market", Side: "Sell", Lots: "0.10"},
 	}}
 	w := newTestWorker(t, api, true)
 	s := sig("close_short")
@@ -153,7 +153,7 @@ func TestPartialCloseUsesRatio(t *testing.T) {
 
 func TestSetStopLossCarriesExistingTP(t *testing.T) {
 	api := &fakeForex{openOrders: []paymentapi.ForexOpenOrder{
-		{Ticket: "31", Symbol: "XAUUSD", OrderType: "buy", Volume: "0.01", StopLoss: "4480", TakeProfit: "4520"},
+		{Ticket: "31", Symbol: "XAUUSD", OrderType: "Market", Side: "Buy", Lots: "0.01", StopLoss: "4480", TakeProfit: "4520"},
 	}}
 	w := newTestWorker(t, api, true)
 	s := sig("set_stop_loss")
@@ -170,8 +170,8 @@ func TestSetStopLossCarriesExistingTP(t *testing.T) {
 
 func TestCancelTargetsPendingOnly(t *testing.T) {
 	api := &fakeForex{openOrders: []paymentapi.ForexOpenOrder{
-		{Ticket: "41", Symbol: "XAUUSD", OrderType: "buy", Volume: "0.01"},
-		{Ticket: "42", Symbol: "XAUUSD", OrderType: "sellStop", Volume: "0.01"},
+		{Ticket: "41", Symbol: "XAUUSD", OrderType: "Market", Side: "Buy", Lots: "0.01"},
+		{Ticket: "42", Symbol: "XAUUSD", OrderType: "Stop", Side: "Sell", Lots: "0.01"},
 	}}
 	w := newTestWorker(t, api, true)
 	w.executeSignal(sig("cancel"))
@@ -260,7 +260,7 @@ func TestStatePersistRoundtrip(t *testing.T) {
 
 func TestTelemetryShape(t *testing.T) {
 	api := &fakeForex{openOrders: []paymentapi.ForexOpenOrder{
-		{Ticket: "51", Symbol: "XAUUSD", OrderType: "buy", Volume: "0.01", OpenPrice: "4500", Profit: "1.5"},
+		{Ticket: "51", Symbol: "XAUUSD", OrderType: "Market", Side: "Buy", Lots: "0.01", OpenPrice: "4500", Profit: "1.5"},
 	}}
 	w := newTestWorker(t, api, true)
 	data := w.collectTelemetry()
