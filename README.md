@@ -21,6 +21,13 @@ npm i -g @decodeex/bifu-cli
 
 验证版本:`bifu-cli version`。检查/升级:`bifu-cli version --check`、`bifu-cli upgrade`(按安装方式 brew/npm/curl 自动升级,`-y` 免确认)。
 
+> **macOS + Homebrew 首次运行被拦?** Homebrew 会给下载的二进制打隔离标记,而
+> bifu-cli 尚未 Apple 公证,Gatekeeper 会直接拒绝执行(进程被 kill,无提示)。
+> 放行一次即可:系统设置 → 隐私与安全性 → 「仍要允许」;或命令行
+> `xattr -d com.apple.quarantine "$(brew --prefix)/Caskroom/bifu-cli"/*/bifu-cli`。
+> 产物完整性可用 Release 页 cosign 签名的 `checksums.txt` 校验。
+> curl / npm 安装不受影响。Apple 公证接入后此步骤将不再需要。
+
 从源码编译(需要 Go 1.25+):
 
 ```bash
