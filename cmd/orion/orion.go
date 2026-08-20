@@ -1,5 +1,6 @@
-// Package orion implements the `bifu-cli orion` command group: read-only
-// access to orion signal subscription market data (pricing, signals, history).
+// Package orion implements the `bifu-cli orion` command group: orion signal
+// subscription market data (pricing, signals, history) plus a signal-relay
+// worker mode that trades gateway signals automatically.
 package orion
 
 import (
@@ -20,15 +21,16 @@ type LoadFn func() (*clifconfig.Profile, *output.Printer, error)
 func NewOrionCmd(load LoadFn) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "orion",
-		Short: "Orion signal subscription — pricing, signals, history (read-only)",
-		Long: `Read-only access to the orion signal product.
+		Short: "Orion signal subscription — pricing, signals, history, relay worker",
+		Long: `Access to the orion signal product.
 
   price          subscription pricing (public)
   signal         current signal + active buy/sell calls (needs subscription)
   signal-history past signals (details need a subscription)
-  subscription   your current subscription status (needs login)`,
+  subscription   your current subscription status (needs login)
+  worker         run as a signal-relay worker: auto-trade gateway signals`,
 	}
-	cmd.AddCommand(newPriceCmd(load), newSignalCmd(load), newHistoryCmd(load), newSubscriptionCmd(load))
+	cmd.AddCommand(newPriceCmd(load), newSignalCmd(load), newHistoryCmd(load), newSubscriptionCmd(load), newWorkerCmd(load))
 	return cmd
 }
 
