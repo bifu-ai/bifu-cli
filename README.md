@@ -21,6 +21,13 @@ npm i -g @decodeex/bifu-cli
 
 验证版本:`bifu-cli version`。检查/升级:`bifu-cli version --check`、`bifu-cli upgrade`(按安装方式 brew/npm/curl 自动升级,`-y` 免确认)。
 
+> **macOS + Homebrew 首次运行被拦?** Homebrew 会给下载的二进制打隔离标记,而
+> bifu-cli 尚未 Apple 公证,Gatekeeper 会直接拒绝执行(进程被 kill,无提示)。
+> 放行一次即可:系统设置 → 隐私与安全性 → 「仍要允许」;或命令行
+> `xattr -d com.apple.quarantine "$(brew --prefix)/Caskroom/bifu-cli"/*/bifu-cli`。
+> 产物完整性可用 Release 页 cosign 签名的 `checksums.txt` 校验。
+> curl / npm 安装不受影响。Apple 公证接入后此步骤将不再需要。
+
 从源码编译(需要 Go 1.25+):
 
 ```bash
@@ -728,7 +735,7 @@ bifu-cli config use dev
 
 ---
 
-## orion — 信号订阅行情(只读)
+## orion — 信号订阅行情 + relay worker
 
 orion 是 BifuFX 的**交易信号订阅**产品。`price` 公开;`signal` / `signal-history`
 明细需要有效订阅,`subscription` 需登录。统一走 `--profile` 的会话 cookie。
@@ -754,6 +761,45 @@ STD    1 month     100    no     yes     on
 ```
 
 > 没有有效订阅时,`signal` / `signal-history` 会友好提示「需订阅查看明细」,不报错。
+
+### orion worker — 接收信号自动下单
+
+`orion worker` 让 bifu-cli 作为 **signal-relay gateway 的 worker** 常驻运行:
+经 WebSocket 接收 gateway 解析好的交易信号(开/平/改止损止盈/撤单),
+自动在指定 MT5 账号上经外汇下单接口执行。需登录,且 `--login-id`
+必须是当前登录用户名下的外汇账号。
+
+```bash
+# 先 dry-run 观察(默认,只打印将执行的动作,不下单)
+bifu-cli orion worker --api-key gwk_xxx --login-id 90390034 --symbol XAUUSD
+
+# 实盘执行,每单默认 0.01 手(信号自带手数时优先用信号的)
+bifu-cli orion worker --api-key gwk_xxx --login-id 90390034 --symbol XAUUSD --volume 0.01 --live
+```
+
+| Flag | 默认 | 说明 |
+| --- | --- | --- |
+| `--api-key` | 环境变量 `BIFU_RELAY_API_KEY` | gateway 颁发的 worker key(`gwk_…`) |
+| `--gateway-url` | `wss://gw.relaysignal.dev` | gateway WebSocket 地址 |
+| `--login-id` | (必填) | 执行下单的 MT5 账号 |
+| `--symbol` | `XAUUSD` | 交易品种 |
+| `--volume` | `0.01` | 信号未带手数时的默认手数 |
+| `--live` | 关 | 实盘总开关;不加则全部 dry-run |
+| `--default-source-status` | `test` | 新信号源的初始规则(`test`/`live`) |
+| `--worker-id` | `bifu-cli-<hostname>` | gateway 管理后台里显示的名字 |
+
+信号映射:开多/空 → 市价单(带入场区间 → 区间中点挂单);`close_*` → 按方向
+批量平仓(减仓比例 → 部分平仓);改止损/止盈 → 保留未改动的另一侧;撤单 →
+批量撤挂单。
+
+**双重安全开关**:真实下单需同时满足 ①命令行加了 `--live` ②该信号源的规则为
+`live`。新发现的源默认 `test`(只模拟),可在 gateway 管理后台远程切换
+(pause / resume / 逐源 test↔live),无需重启 worker。
+
+> 断线自动重连,带 `last_seq` 让 gateway 补发漏掉的信号;trace_id 去重,
+> 超过 90s 的历史回放只推进游标不执行(防止重启后重放老信号)。运行状态
+> (`last_seq`、逐源规则)持久化在 `~/.bifu-cli/orion-worker-state.json`;
+> 每 30s 上报一帧遥测(状态/持仓),gateway 管理后台可见。
 
 ---
 
