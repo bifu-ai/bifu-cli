@@ -3,6 +3,7 @@ package payment
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -150,6 +151,19 @@ Account types:
 				return fmt.Errorf("--from and --to must be different account types")
 			}
 
+			// FOREX 侧接受 MT5 login 或内部 account id，后端只认后者，
+			// 传 login 会报「外汇账户不存在」——这里统一解析成内部 id。
+			if fromKey == "FOREX" && fromAccountID != 0 {
+				if fromAccountID, err = resolveForexAccountID(c, fromAccountID); err != nil {
+					return err
+				}
+			}
+			if toKey == "FOREX" && toAccountID != 0 {
+				if toAccountID, err = resolveForexAccountID(c, toAccountID); err != nil {
+					return err
+				}
+			}
+
 			req := &paymentapi.UnifiedTransferReq{
 				FromAccountType: fromType,
 				FromAccountID:   fromAccountID,
@@ -181,14 +195,44 @@ Account types:
 	cmd.Flags().StringVar(&amount, "amount", "", "Amount to transfer")
 	cmd.Flags().StringVar(&currency, "currency", "", "Currency code for fiat accounts (e.g. USD)")
 	cmd.Flags().Int32Var(&coinID, "coin-id", 0, "Coin ID for crypto accounts (dev: 2=USDT)")
-	cmd.Flags().Int64Var(&fromAccountID, "from-account-id", 0, "Source account ID/login (e.g. forex login when --from FOREX)")
-	cmd.Flags().Int64Var(&toAccountID, "to-account-id", 0, "Destination account ID/login (e.g. forex login when --to FOREX)")
+	cmd.Flags().Int64Var(&fromAccountID, "from-account-id", 0, "Source account: forex ACCOUNT_ID or MT5 login (login is auto-resolved)")
+	cmd.Flags().Int64Var(&toAccountID, "to-account-id", 0, "Destination account: forex ACCOUNT_ID or MT5 login (login is auto-resolved)")
 	cmd.Flags().Int32Var(&mtType, "mt-type", 0, "Forex platform for FOREX transfers: 2=MT5, 3=TradFi (0→MT5)")
 	cmd.Flags().StringVar(&comment, "comment", "", "Optional remark")
 	_ = cmd.MarkFlagRequired("from")
 	_ = cmd.MarkFlagRequired("to")
 	_ = cmd.MarkFlagRequired("amount")
 	return cmd
+}
+
+// resolveForexAccountID 把 --from/--to-account-id 传入的值解析成后端要的内部
+// account id：先按内部 id 精确匹配，再按 MT5 login 匹配；都不中则列出可用账号。
+func resolveForexAccountID(c *paymentapi.Client, id int64) (int64, error) {
+	items, err := c.GetForexAccountList()
+	if err != nil {
+		return 0, fmt.Errorf("resolve forex account %d: %w", id, err)
+	}
+	s := strconv.FormatInt(id, 10)
+	for _, it := range items {
+		if it.ID == s {
+			return id, nil
+		}
+	}
+	for _, it := range items {
+		if it.Login == s {
+			resolved, perr := strconv.ParseInt(it.ID, 10, 64)
+			if perr != nil {
+				return 0, fmt.Errorf("forex login %s has non-numeric account id %q", s, it.ID)
+			}
+			return resolved, nil
+		}
+	}
+	var have []string
+	for _, it := range items {
+		have = append(have, fmt.Sprintf("login=%s id=%s", it.Login, it.ID))
+	}
+	return 0, fmt.Errorf("forex account %d not found (neither account id nor login); yours: %s",
+		id, strings.Join(have, ", "))
 }
 
 // ── payment forex-accounts ────────────────────────────────────────────────────
