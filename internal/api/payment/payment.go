@@ -211,7 +211,9 @@ type BatchOrderResult struct {
 type ForexOpenOrder struct {
 	Ticket     string `json:"ticket"`
 	Symbol     string `json:"symbol"`
-	OrderType  string `json:"orderType"`
+	OrderType  string `json:"orderType"` // Market / Limit / Stop —— 不含方向
+	Side       string `json:"side"`      // Buy / Sell
+	Lots       string `json:"lots"`      // 手数（volume 字段是另一种口径，勿用）
 	Volume     string `json:"volume"`
 	OpenPrice  string `json:"openPrice"`
 	OpenTime   string `json:"openTime"`

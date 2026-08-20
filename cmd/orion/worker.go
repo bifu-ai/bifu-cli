@@ -40,10 +40,10 @@ Safety: without --live every action is logged as a dry-run. Per-source rules
 the gateway admin UI; a source only trades for real when BOTH --live is set
 and its rule is "live".`,
 		Example: `  # dry-run first (recommended)
-  bifu-cli orion worker --api-key gwk_xxx --login-id 90390034 --symbol XAUUSD
+  bifu-cli orion worker --api-key gwk_xxx --login-id 90390034 --symbol XAUUSD.e
 
   # real orders, 0.01 lots per signal unless the signal carries its own size
-  bifu-cli orion worker --api-key gwk_xxx --login-id 90390034 --symbol XAUUSD --volume 0.01 --live`,
+  bifu-cli orion worker --api-key gwk_xxx --login-id 90390034 --symbol XAUUSD.e --volume 0.01 --live`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			p, pr, err := load()
 			if err != nil {
@@ -100,7 +100,7 @@ and its rule is "live".`,
 	cmd.Flags().StringVar(&apiKey, "api-key", "", "gateway worker key (gwk_…, or env BIFU_RELAY_API_KEY)")
 	cmd.Flags().StringVar(&workerID, "worker-id", "", "worker id shown in the gateway admin UI (default bifu-cli-<hostname>)")
 	cmd.Flags().Int64Var(&loginID, "login-id", 0, "MT5 account login ID to trade on")
-	cmd.Flags().StringVar(&symbol, "symbol", "XAUUSD", "MT5 symbol to trade")
+	cmd.Flags().StringVar(&symbol, "symbol", "XAUUSD.e", "MT5 symbol to trade (bifu 品种带 .e 后缀，裸名会被 10013 拒单)")
 	cmd.Flags().Float64Var(&volume, "volume", 0.01, "default lot size when the signal has none")
 	cmd.Flags().BoolVar(&live, "live", false, "place real orders (default: dry-run, only log actions)")
 	cmd.Flags().StringVar(&defaultSourceStatus, "default-source-status", "test", "rule for newly seen signal sources: test|live")
